@@ -37,12 +37,12 @@
 
 #include "datapage.h"
 
-static notrace u32 vdso_read_begin(const struct vdso_data *vdata)
+static notrace u32 vdso_read_begin(const struct vdso_data *vd)
 {
 	u32 seq;
 
 	do {
-		seq = READ_ONCE(vdata->tb_seq_count);
+		seq = READ_ONCE(vd->tb_seq_count);
 
 		if ((seq & 1) == 0)
 			break;
@@ -54,12 +54,12 @@ static notrace u32 vdso_read_begin(const struct vdso_data *vdata)
 	return seq;
 }
 
-static notrace int vdso_read_retry(const struct vdso_data *vdata, u32 start)
+static notrace int vdso_read_retry(const struct vdso_data *vd, u32 start)
 {
 	u32 seq;
 
 	smp_rmb(); /* Pairs with first smp_wmb in update_vsyscall */
-	seq = READ_ONCE(vdata->tb_seq_count);
+	seq = READ_ONCE(vd->tb_seq_count);
 	return seq != start;
 }
 
@@ -131,8 +131,8 @@ static notrace u64 get_ns(const struct vdso_data *vd)
 
 	cycle_delta = (cycle_now - vd->cs_cycle_last) & vd->cs_mask;
 
-	nsec = (cycle_delta * vdata->cs_mono_mult) + vdata->xtime_clock_snsec;
-	nsec >>= vdata->cs_shift;
+	nsec = (cycle_delta * vd->cs_mono_mult) + vd->xtime_clock_snsec;
+	nsec >>= vd->cs_shift;
 
 	return nsec;
 }
@@ -145,7 +145,7 @@ static notrace int do_realtime(const struct vdso_data *vd, struct timespec *ts)
 	do {
 		seq = vdso_read_begin(vd);
 
-		if (vdata->use_syscall)
+		if (vd->use_syscall)
 			return -1;
 
 		ts->tv_sec = vd->xtime_clock_sec;
@@ -168,7 +168,7 @@ static notrace int do_monotonic(const struct vdso_data *vd, struct timespec *ts)
 	do {
 		seq = vdso_read_begin(vd);
 
-		if (vdata->use_syscall)
+		if (vd->use_syscall)
 			return -1;
 
 		ts->tv_sec = vd->xtime_clock_sec;
