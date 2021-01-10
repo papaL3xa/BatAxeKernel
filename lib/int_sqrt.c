@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+ 
 /*
  * Copyright (C) 2013 Davidlohr Bueso <davidlohr.bueso@hp.com>
  *
@@ -8,7 +8,6 @@
 
 #include <linux/kernel.h>
 #include <linux/export.h>
-#include <linux/bitops.h>
 
 /**
  * int_sqrt - rough approximation to sqrt
