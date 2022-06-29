@@ -58,9 +58,9 @@
 #define LZ4_MEMORY_USAGE 14
 
 #define LZ4_MAX_INPUT_SIZE 0x7E000000 /* 2 113 929 216 bytes */
-#define LZ4_COMPRESSBOUND(isize)                                    \
-	((unsigned int)(isize) > (unsigned int)LZ4_MAX_INPUT_SIZE ? \
-		 0 :                                                \
+#define LZ4_COMPRESSBOUND(isize)                                               \
+	((unsigned int)(isize) > (unsigned int)LZ4_MAX_INPUT_SIZE ?            \
+		 0 :                                                           \
 		 (isize) + ((isize) / 255) + 16)
 
 #define LZ4_ACCELERATION_DEFAULT 1
@@ -83,17 +83,17 @@
 /*-************************************************************************
  *	STREAMING CONSTANTS AND STRUCTURES
  **************************************************************************/
-#define LZ4_STREAM_MINSIZE           \
-	((1UL << LZ4_MEMORY_USAGE) + \
+#define LZ4_STREAMSIZE                                                         \
+	((1UL << LZ4_MEMORY_USAGE) +                                           \
 	 32) /* static size, for inter-version compatibility */
+#define LZ4_STREAMSIZE_VOIDP (LZ4_STREAMSIZE / sizeof(void *))
+
+#define LZ4_STREAMDECODESIZE_U64                                               \
+	(4 + ((sizeof(void *) == 16) ? 2 : 0) /*AS-400*/)
+#define LZ4_STREAMDECODESIZE                                                   \
+	(LZ4_STREAMDECODESIZE_U64 * sizeof(unsigned long long))
 
 #define LZ4_STREAMHCSIZE_SIZET (262192 / sizeof(size_t))
-
-/*! LZ4_stream_t :
- *  Never ever use below internal definitions directly !
- *  These definitions are not API/ABI safe, and may change in future versions.
- *  If you need static allocation, declare or allocate an LZ4_stream_t object.
-**/
 
 /*
  * LZ4_stream_t - information structure to track an LZ4 stream.
@@ -101,15 +101,14 @@
 typedef struct LZ4_stream_t_internal LZ4_stream_t_internal;
 struct LZ4_stream_t_internal {
 	uint32_t hashTable[LZ4_HASH_SIZE_U32];
-	const uint8_t *dictionary;
-	const LZ4_stream_t_internal *dictCtx;
 	uint32_t currentOffset;
 	uint32_t tableType;
+	const uint8_t *dictionary;
+	const LZ4_stream_t_internal *dictCtx;
 	uint32_t dictSize;
-	/* Implicit padding to ensure structure is aligned */
 };
 typedef union {
-	char minStateSize[LZ4_STREAM_MINSIZE];
+	void *table[LZ4_STREAMSIZE_VOIDP];
 	LZ4_stream_t_internal internal_donotuse;
 } LZ4_stream_t;
 
@@ -164,7 +163,7 @@ typedef union {
 /*-************************************************************************
  *	SIZE OF STATE
  **************************************************************************/
-#define LZ4_MEM_COMPRESS sizeof(LZ4_stream_t)
+#define LZ4_MEM_COMPRESS LZ4_STREAMSIZE
 #define LZ4HC_MEM_COMPRESS LZ4_STREAMHCSIZE
 
 /*-************************************************************************
@@ -660,9 +659,5 @@ int LZ4_decompress_safe_continue(LZ4_streamDecode_t *LZ4_streamDecode,
  */
 //int LZ4_decompress_fast_usingDict(const char *source, char *dest,
 //	int originalSize, const char *dictStart, int dictSize);
-
-ssize_t LZ4_arm64_decompress_safe(const void *source, void *dest, size_t inputSize, size_t outputSize, bool dip);
-
-ssize_t LZ4_arm64_decompress_safe_partial(const void *source, void *dest, size_t inputSize, size_t outputSize, bool dip);
 
 #endif

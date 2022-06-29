@@ -83,16 +83,12 @@ typedef uintptr_t uptrval;
 #define MINMATCH 4
 
 #define WILDCOPYLENGTH 8
-#define LASTLITERALS 5
-#define MFLIMIT (WILDCOPYLENGTH + MINMATCH)
-/*
- * ensure it's possible to write 2 x wildcopyLength
- * without overflowing output buffer
- */
-#define MATCH_SAFEGUARD_DISTANCE  ((2 * WILDCOPYLENGTH) - MINMATCH)
-
-/* Increase this value ==> compression run slower on incompressible data */
-#define LZ4_SKIPTRIGGER 6
+#define LASTLITERALS 5 /* see ../doc/lz4_Block_format.md#parsing-restrictions */
+#define MFLIMIT 12 /* see ../doc/lz4_Block_format.md#parsing-restrictions */
+#define MATCH_SAFEGUARD_DISTANCE \
+	((2 * WILDCOPYLENGTH) -  \
+	 MINMATCH) /* ensure it's possible to write 2 x wildcopyLength without overflowing output buffer */
+#define FASTLOOP_SAFE_DISTANCE 64
 
 #define HASH_UNIT sizeof(size_t)
 
@@ -149,32 +145,6 @@ static FORCE_INLINE U16 LZ4_readLE16(const void *memPtr)
 static FORCE_INLINE void LZ4_writeLE16(void *memPtr, U16 value)
 {
 	return put_unaligned_le16(value, memPtr);
-}
-
-/*
- * LZ4 relies on memcpy with a constant size being inlined. In freestanding
- * environments, the compiler can't assume the implementation of memcpy() is
- * standard compliant, so apply its specialized memcpy() inlining logic. When
- * possible, use __builtin_memcpy() to tell the compiler to analyze memcpy()
- * as-if it were standard compliant, so it can inline it in freestanding
- * environments. This is needed when decompressing the Linux Kernel, for example.
- */
-#define LZ4_memcpy(dst, src, size) __builtin_memcpy(dst, src, size)
-#define LZ4_memmove(dst, src, size) __builtin_memmove(dst, src, size)
-
-static FORCE_INLINE void LZ4_copy8(void *dst, const void *src)
-{
-#if LZ4_ARCH64
-	U64 a = get_unaligned((const U64 *)src);
-
-	put_unaligned(a, (U64 *)dst);
-#else
-	U32 a = get_unaligned((const U32 *)src);
-	U32 b = get_unaligned((const U32 *)src + 1);
-
-	put_unaligned(a, (U32 *)dst);
-	put_unaligned(b, (U32 *)dst + 1);
-#endif
 }
 
 /*
@@ -270,6 +240,6 @@ typedef enum { noDictIssue = 0, dictSmall } dictIssue_directive;
 typedef enum { endOnOutputSize = 0, endOnInputSize = 1 } endCondition_directive;
 typedef enum { decode_full_block = 0, partial_decode = 1 } earlyEnd_directive;
 
-#define LZ4_STATIC_ASSERT(c)	BUILD_BUG_ON(!(c))
+#define LZ4_STATIC_ASSERT(c) BUILD_BUG_ON(!(c))
 
 #endif
