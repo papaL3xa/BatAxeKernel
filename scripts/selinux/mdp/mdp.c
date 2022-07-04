@@ -32,6 +32,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+<<<<<<< HEAD
+=======
+
+>>>>>>> 98c18f4927f5 (In file included from scripts/selinux/genheaders/genheaders.c:18:)
 
 static void usage(char *name)
 {
