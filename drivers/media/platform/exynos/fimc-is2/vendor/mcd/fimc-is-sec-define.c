@@ -2950,6 +2950,7 @@ int fimc_is_sec_sensorid_find_rear_tof(struct fimc_is_core *core)
 int fimc_is_sec_sensor_find_rear_tof_uid(struct fimc_is_core *core, char *buf)
 {
 #ifdef CAMERA_REAR_TOF
+	int i;	
 	struct fimc_is_vender_specific *specific = core->vender.private_data;
 	struct fimc_is_rom_info *finfo = NULL;
 	int i = 0;
@@ -2979,6 +2980,7 @@ int fimc_is_sec_sensor_find_rear_tof_uid(struct fimc_is_core *core, char *buf)
 int fimc_is_sec_sensor_find_front_tof_uid(struct fimc_is_core *core, char *buf)
 {
 #ifdef CAMERA_FRONT_TOF
+	int i;
 	struct fimc_is_vender_specific *specific = core->vender.private_data;
 	struct fimc_is_rom_info *finfo = NULL;
 	int i = 0;
@@ -2987,7 +2989,7 @@ int fimc_is_sec_sensor_find_front_tof_uid(struct fimc_is_core *core, char *buf)
 
 	if (finfo->cal_map_ver[3] >= FRONT_TOF_CHECK_MAP_VERSION) {
 		char uid_list[256] = {0, };
-		char uid_temp[10] = {0, };
+		char uid_temp[10] = {0, };	
 		for (i = 0; i < finfo->rom_tof_cal_uid_addr_len; i++) {
 			specific->front_tof_uid[i] = *((int32_t*)&buf[finfo->rom_tof_cal_uid_addr[i]]);
 			sprintf(uid_temp, "0x%x ", specific->front_tof_uid[i]);
