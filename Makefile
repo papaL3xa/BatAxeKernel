@@ -811,6 +811,14 @@ ifeq ($(ld-name),lld)
 LDFLAGS += -O2
 endif
 
+ifeq ($(ld-name),lld)
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
+LDFLAGS += -O2
+else ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3
+LDFLAGS += -O3
+endif
+endif
+
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-const-variable)
 ifdef CONFIG_FRAME_POINTER
 KBUILD_CFLAGS	+= -fno-omit-frame-pointer -fno-optimize-sibling-calls
