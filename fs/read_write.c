@@ -25,6 +25,18 @@
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 
+#ifdef CONFIG_KSU
+#include <ksu_hook.h>
+#endif
+
+#ifdef CONFIG_SECURITY_DEFEX
+#include <linux/defex.h>
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+#include <linux/fscrypto_sdp_cache.h>
+#endif
+
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
 	.read_iter	= generic_file_read_iter,
@@ -439,10 +451,9 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
 
-#ifdef CONFIG_KSU 
-	if (unlikely(ksu_vfs_read_hook))
-		ksu_handle_vfs_read(&file, &buf, &count, &pos);
-#endif
+#ifdef CONFIG_KSU
+	ksu_handle_vfs_read(&file, &buf, &count, &pos);
+#endif	
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
