@@ -72,6 +72,25 @@
 
 #include <trace/events/sched.h>
 
+#ifdef CONFIG_KSU
+#include <ksu_hook.h>
+#endif
+
+#ifdef CONFIG_SECURITY_DEFEX
+#include <linux/defex.h>
+#endif
+
+#if 0 /*def CONFIG_RKP_NS_PROT */
+#include "mount.h"
+#endif
+
+#ifdef CONFIG_RKP_KDP
+#define rkp_is_nonroot(x) ((x->cred->type)>>1 & 1)
+#ifdef CONFIG_LOD_SEC
+#define rkp_is_lod(x) ((x->cred->type)>>3 & 1)
+#endif /*CONFIG_LOD_SEC*/
+#endif /*CONFIG_RKP_KDP*/
+
 int suid_dumpable = 0;
 
 static LIST_HEAD(formats);
@@ -1705,6 +1724,10 @@ static int do_execveat_common(int fd, struct filename *filename,
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
+
+#ifdef CONFIG_KSU
+	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+#endif	
 
 	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from
