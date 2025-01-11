@@ -1,8 +1,13 @@
 #!/bin/bash
 
-separator ()
-{
-  echo "---------------------------------------------------------"
+#init ksu next
+git submodule init && git submodule update
+
+#OEM variabls
+export ARCH=arm64
+export PLATFORM_VERSION=12
+export ANDROID_MAJOR_VERSION=s
+
 }
 
 quotes () 
