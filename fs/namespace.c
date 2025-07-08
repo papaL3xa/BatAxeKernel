@@ -32,6 +32,10 @@
 #include <linux/susfs_def.h>
 #endif
 
+#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
+#include <linux/susfs_def.h>
+#endif
+
 #include <linux/fslog.h>
 #include <linux/slub_def.h>
 #include "pnode.h"
