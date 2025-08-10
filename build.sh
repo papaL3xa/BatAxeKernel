@@ -325,13 +325,9 @@ toolchain ()
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
             CLANG=498229b # Clang 17.0.4
-        elif [[ "$LLVM" == "18" ]]; then
-            CLANG=522817 # Clang 18.0.1
-        elif [[ "$LLVM" == "19" ]]; then
-            CLANG=547379 # Clang 19.0.1          
         else
-            LLVM=20
-            CLANG=536225 # Clang 20.0.0
+            LLVM=18
+            CLANG=522817 # Clang 18.0.1
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -436,7 +432,7 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next.git > /dev/null
+        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git
         bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
         separator
         check "KernelSU Next"
