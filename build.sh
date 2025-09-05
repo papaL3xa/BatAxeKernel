@@ -130,7 +130,7 @@ if [ -z $MODEL ]; then
     MODEL=d2s
 fi
 
-KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
+KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
@@ -175,10 +175,11 @@ detect_env ()
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/"
-    REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
-    export KBUILD_BUILD_USER=oItsMineZ
-    export KBUILD_BUILD_HOST=StardustKernel
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/"
+    REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/" 
+    KERNEL_NAME=BatAxeKernel
+    export KBUILD_BUILD_USER=papaL3xa
+    export KBUILD_BUILD_HOST=BatAxeKernel
 
     if [[ "$SOC" == "5" ]]; then
         DEVICE=Note10
@@ -408,20 +409,20 @@ kernelsu ()
 {
     separator
 
-    if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-        quotes "Patching KernelSU to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/KernelSU.patch")
-        separator
-        check "KernelSU"
-    fi
+    # Nonaktifkan patch KernelSU (dikomentari)
+    # if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
+    #     quotes "Patching KernelSU to Kernel Tree"
+    #     separator
+    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
+    #     separator
+    #     check "KernelSU"
+    # fi
 
-    if ! test -f "arch/arm64/configs/ksu-next.config"; then
-        quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
-        check "KernelSU Next Defconfig"
-    fi
-
+    #if ! test -f "arch/arm64/configs/ksu.config"; then
+    #    quotes "Getting KernelSU Next Defconfig"
+    #    curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+    #    check "KernelSU Next Defconfig"
+    #fi
     if ! test -d "drivers/kernelsu"; then
         quotes "Add KernelSU Next as Submodule"
         separator
@@ -430,20 +431,21 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -f -q https://github.com/oItsMineZ/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/oItsMineZ/KernelSU-Next/next-susfs/kernel/setup.sh")
+        git submodule add -f -q https://github.com/GoRhanHee/KernelSU-Next.git > /dev/null
+        curl -LSs "https://raw.githubusercontent.com/GoRhanHee/KernelSU-Next/next-susfs-experimental/kernel/setup.sh" | bash -
         separator
         check "KernelSU Next"
     fi
 
-    if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-        separator
-        quotes "Patching SuSFS to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/SuSFS.patch")
-        separator
-        check "SuSFS"
-    fi
+    # Nonaktifkan patch SuSFS (dikomentari)
+    # if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
+    #     separator
+    #     quotes "Patching SuSFS to Kernel Tree"
+    #     separator
+    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
+    #     separator
+    #     check "SuSFS"
+    # fi
 }
 
 kernel ()
@@ -467,7 +469,7 @@ kernel ()
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
@@ -586,7 +588,7 @@ build_zip ()
     sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
 
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        sed -i "s/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-StardustKernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null

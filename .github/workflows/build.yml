@@ -8,6 +8,10 @@ on:
         description: 'Kernel Version'
         required: true
         default: 'v'
+      ksun:
+        description: 'Install KernelSU-Next ?'
+        required: true
+        default: 'y'
       llvm:
         description: 'Clang (12-18) or Neutron (Latest) Version'
         required: true
@@ -44,7 +48,7 @@ jobs:
           
       - name: Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -l ${{ github.event.inputs.llvm }} -r n
+            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r n
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
