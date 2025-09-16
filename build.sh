@@ -72,7 +72,7 @@ Options:
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-20) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -115,7 +115,7 @@ while [[ $# -gt 0 ]]; do
                 NEUTRON="$2"
                 shift 2
             else
-                NEUTRON=42069420
+                NEUTRON=10032024
                 shift
             fi
             ;;
