@@ -416,12 +416,6 @@ kernelsu ()
     # Build Setup KernelSU
     separator
 
-    if ! test -f "arch/arm64/configs/ksu.config"; then
-        quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
-        check "KernelSU Next Defconfig"
-    fi
-
     if test -d "KernelSU-Next"; then
     	rm -rf "${LOCATION}/KernelSU-Next"
         
