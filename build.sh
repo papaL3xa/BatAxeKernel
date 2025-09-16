@@ -329,7 +329,6 @@ toolchain ()
             CLANG=522817 # Clang 18.0.1
         elif [[ "$LLVM" == "19" ]]; then
             CLANG=547379 # Clang 19.0.1
-        fi
         else
             LLVM=20
             CLANG=536225 # Clang 20.0.0
