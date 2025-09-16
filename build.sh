@@ -423,8 +423,7 @@ kernelsu ()
     fi
 
     if test -d "KernelSU-Next"; then
-    	rm -rf "${LOCATION}/KernelSU-Next"		
-	fi	
+    	rm -rf "${LOCATION}/KernelSU-Next"
         
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash - || exit 1
 		rm -rf "${LOCATION}/KernelSU-Next"
