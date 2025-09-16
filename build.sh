@@ -423,8 +423,9 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -b -f -q next-susfs-experimental https://github.com/sidex15/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
+        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash - || exit 1
+        rm -rf "${LOCATION}/KernelSU-Next"
         separator
         check "KernelSU Next"
     fi
@@ -570,7 +571,7 @@ build_zip ()
     sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
 
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME.Kernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME.Kernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null

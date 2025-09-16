@@ -1,0 +1,3 @@
+[submodule "build/AIK"]
+	path = build/AIK
+	url = https://github.com/papaL3xa/Android-Image-Kitchen
