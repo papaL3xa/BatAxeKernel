@@ -130,7 +130,7 @@ if [ -z $MODEL ]; then
     MODEL=d2s
 fi
 
-KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
+KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
@@ -175,7 +175,7 @@ detect_env ()
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/exynos9820"
     REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
     KERNEL_NAME=BatAxe
     export KBUILD_BUILD_USER=papaL3xa
@@ -472,7 +472,7 @@ kernel ()
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
