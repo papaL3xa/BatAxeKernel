@@ -324,10 +324,15 @@ toolchain ()
         elif [[ "$LLVM" == "16" ]]; then
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4          
+            CLANG=498229b # Clang 17.0.4 
+        elif [[ "$LLVM" == "18" ]]; then
+            CLANG=522817 # Clang 18.0.1
+        elif [[ "$LLVM" == "19" ]]; then
+            CLANG=547379 # Clang 19.0.1
+        fi
         else
             LLVM=20
-            CLANG=522817 # Clang 18.0.1
+            CLANG=536225 # Clang 20.0.0
         fi
 
         KERNELCLANG=Clang$LLVM
