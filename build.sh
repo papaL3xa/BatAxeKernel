@@ -621,7 +621,7 @@ rm -rf ./build.log
     fi
 
     if [[ "$KSU" == "y" ]]; then
-        KSU_NEXT=ksun.config
+        KSU_NEXT=ksu.config
         kernelsu
     fi
 
