@@ -325,9 +325,13 @@ toolchain ()
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
             CLANG=498229b # Clang 17.0.4 
-        else
-            LLVM=18
+        elif [[ "$LLVM" == "18" ]]; then
             CLANG=522817 # Clang 18.0.1
+        elif [[ "$LLVM" == "19" ]]; then
+            CLANG=547379 # Clang 19.0.1          
+        else
+            LLVM=20
+            CLANG=536225 # Clang 20.0.0
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -409,6 +413,14 @@ kernelsu ()
 {
     separator
 
+    if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
+        quotes "Patching KernelSU to Kernel Tree"
+        separator
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/Patching_KernelSU_to_Kernel_Tree.patch")
+        separator
+        check "KernelSU"
+    fi
+
     if ! test -f "arch/arm64/configs/ksu.config"; then
         quotes "Getting KernelSU Next Defconfig"
         curl -LSs "https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
@@ -422,11 +434,20 @@ kernelsu ()
         if test -d "KernelSU-Next"; then
             rm -rf Ke*
         fi
-        
-        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git > /dev/null
+
+        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
         bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
         separator
         check "KernelSU Next"
+    fi
+
+    if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
+        separator
+        quotes "Patching SuSFS to Kernel Tree"
+        separator
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/implement_SUSFS_v1.5.9.patch")
+        separator
+        check "SuSFS"
     fi
 }
 
