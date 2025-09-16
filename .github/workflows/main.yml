@@ -1,5 +1,5 @@
 name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} from ${{ github.sha }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }}'
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         required: true
         default: 'v'
       llvm:
-        description: 'Clang (12-18) or Neutron (Latest) Version'
+        description: 'Clang (12-20) or Neutron (Latest) Version'
         required: true
         default: 'latest'
       tag:
@@ -29,7 +29,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        device: [beyond0lte, beyond1lte, beyond2lte, beyondx, d1, d1xks, d2s, d2x]
+        device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
 
     steps:
       - name: Checkout Tree
@@ -55,7 +55,7 @@ jobs:
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "StardustKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
