@@ -130,7 +130,7 @@ if [ -z $MODEL ]; then
     MODEL=d2s
 fi
 
-KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
+KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
