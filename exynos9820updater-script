@@ -1,1 +1,81 @@
-404: Not Found
+if is_substring("G970", getprop("ro.boot.bootloader")) || is_substring("G973", getprop("ro.boot.bootloader")) ||  is_substring("G975", getprop("ro.boot.bootloader")) || is_substring("G977", getprop("ro.boot.bootloader")) || is_substring("N970", getprop("ro.boot.bootloader")) || is_substring("N971", getprop("ro.boot.bootloader")) || is_substring("N975", getprop("ro.boot.bootloader")) || is_substring("N976", getprop("ro.boot.bootloader")) then    
+	ui_print(" ");
+	ui_print("-- Starting Zip Installer...");
+else
+    abort("-- This Device is Not Supported! This Kernel Only Supports N970, N971, N975, N976 F/N");
+endif;
+
+ui_print(" ");
+ui_print("-----------------------------------------------");
+ui_print("       ⣀⣤⣤⣶⣾⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣶⣶⣦⣤⣀⠀⠀⠀⠀⠀    ");
+ui_print(" ⣀⣴⣶⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣿⣷⣦⣄⡀   ");
+ui_print(" ⠁⠀⠀⠈⠉⠛⣿⣿⣿⣿⣿⣷⣦⣀⢠⣆⣸⡆⢀⣤⣾⣿⣿⣿⣿⣿⠟⠋⠉⠀     ");
+ui_print("	 ⠀⠀⠸⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⠿⠿⠏⠀⠀⠀⠀⠀⠀   ");
+ui_print("	        ⠀⠀⠉⠻⣿⣿⣿⣿⠿⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀     ");
+ui_print("		    ⠀⠀⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀  ");
+ui_print("           __ __    BATAXE           __        ");
+ui_print("          / //_/___  ____ ___  ___  / /        ");
+ui_print("         / ,<  / -_)/ __// _ \/ -_)/ /         ");
+ui_print("        /_/|_| \__//_/  /_//_/\__//_/          ");
+ui_print("----------------------------------------------_");
+run_program("/sbin/sh", "-c", "sleep 3");
+ui_print("----------------- Kernel Info -----------------");
+ui_print(" ");
+ui_print(" Kernel Name: BatAxeKernel");
+ui_print(" ");
+ui_print(" Kernel Version: ");
+ui_print(" ");
+ui_print(" Kernel Device: ");
+ui_print(" ");
+ui_print(" Kernel Based: HVD3 OneUI 4.1 (Binary 7)");
+ui_print(" ");
+ui_print(" Kernel Toolchain: ");
+ui_print(" ");
+ui_print(" Kernel Support: Stock Rom Based OneUI3/4");
+ui_print(" ");
+ui_print(" Kernel Binaries Support: 7, 8, and 9");
+ui_print(" ");
+ui_print(" Kernel Author: oItsMineZ");
+ui_print(" ");
+run_program("/sbin/sh", "-c", "sleep 1");
+ui_print("-----------------------------------------------");
+ui_print(" ");
+ui_print("-- Installing BatAxeKernel RIGHT NOW!!!");
+ui_print(" ");
+ui_print("-----------------------------------------------");
+run_program("/sbin/sh", "-c", "sleep 1");
+
+ui_print(" ");
+ui_print("-- Flashing Kernel Image");
+package_extract_file("boot.img", "/dev/block/platform/13d60000.ufs/by-name/boot");
+run_program("/sbin/sh", "-c", "sleep 1");
+
+ui_print(" ");
+ui_print("-- Flashing DTB Image");
+package_extract_file("dtb.img", "/dev/block/platform/13d60000.ufs/by-name/dtb");
+run_program("/sbin/sh", "-c", "sleep 1");
+
+ui_print(" ");
+ui_print("-- Flashing DTBO Image");
+package_extract_file("dtbo.img", "/dev/block/platform/13d60000.ufs/by-name/dtbo");
+run_program("/sbin/sh", "-c", "sleep 1");
+
+ui_print(" ");
+ui_print("-- Adding Kernel Addons Module to Storage");
+package_extract_file("module.zip", "/sdcard/BatAxeKernel-Addons-Exynos9820-v1.0.zip");
+run_program("/sbin/sh", "-c", "sleep 1");
+
+ui_print(" ");
+ui_print("-----------------------------------------------");
+ui_print(" ");
+ui_print("-- Installation Done!");
+ui_print(" ");
+ui_print("-------------------- Notes --------------------");
+ui_print(" ");
+ui_print("-- Don't forget to install kernel addons module on");
+ui_print(" ");
+ui_print("   /sdcard/BatAxeKernel-Addons-Exynos9820-v1.0.zip");
+ui_print(" ");
+ui_print("-----------------------------------------------");
+ui_print(" ");
+set_progress(1.000000);

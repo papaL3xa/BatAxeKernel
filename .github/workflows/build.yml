@@ -9,7 +9,7 @@ on:
         required: true
         default: 'v'
       llvm:
-        description: 'Clang (12-18) or Neutron (Latest) Version'
+        description: 'Clang (12-20) or Neutron (Latest) Version'
         required: true
         default: 'latest'
       devices:
