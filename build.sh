@@ -472,7 +472,7 @@ kernel ()
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
