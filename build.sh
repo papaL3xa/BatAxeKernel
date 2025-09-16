@@ -175,7 +175,7 @@ detect_env ()
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/exynos9820"
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820"
     REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
     KERNEL_NAME=BatAxe
     export KBUILD_BUILD_USER=papaL3xa
