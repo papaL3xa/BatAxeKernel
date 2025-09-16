@@ -409,8 +409,11 @@ toolchain ()
     "
 }
 
+LOCATION=$(pwd)
+
 kernelsu ()
 {
+    # Build Setup KernelSU
     separator
 
     if ! test -f "arch/arm64/configs/ksu.config"; then
@@ -419,20 +422,14 @@ kernelsu ()
         check "KernelSU Next Defconfig"
     fi
 
-    if ! test -d "drivers/kernelsu"; then
-        quotes "Add KernelSU Next as Submodule"
-        separator
-
-        if test -d "KernelSU-Next"; then
-            rm -rf Ke*
-        fi
-
-        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh")
-        separator
-        check "KernelSU Next"
-    fi
-
+    if test -d "KernelSU-Next"; then
+    	rm -rf "${LOCATION}/KernelSU-Next"		
+	fi	
+        
+        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash - || exit 1
+		rm -rf "${LOCATION}/KernelSU-Next"
+		git clone -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git
+	fi
 }
 
 kernel ()
