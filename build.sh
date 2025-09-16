@@ -422,10 +422,11 @@ kernelsu ()
         if test -d "KernelSU-Next"; then
             rm -rf Ke*
         fi
-
-        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash - || exit 1
-        rm -rf "$PWD/KernelSU-Next"
-        git clone -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git
+        
+        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git > /dev/null
+        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+        separator
+        check "KernelSU Next"
     fi
 }
 
