@@ -34,7 +34,9 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
+          sudo apt update
+          sudo apt upgrade -y
+          sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
           
       - name: Set Environment Variable
         run: |
