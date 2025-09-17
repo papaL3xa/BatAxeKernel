@@ -1,12 +1,9 @@
 #!/bin/bash
 
-#init ksu next
-git submodule init && git submodule update
-
-#OEM variabls
-export ARCH=arm64
-export PLATFORM_VERSION=12
-export ANDROID_MAJOR_VERSION=s
+separator ()
+{
+  echo "---------------------------------------------------------"
+}
 
 quotes () 
 {
@@ -20,25 +17,30 @@ noquotes ()
 
 clean ()
 {
+    separator
     quotes "Cleanup Build Files"
 
     rm -rf o* .w* $(pwd)/AIK-Linux/s* $(pwd)/AIK-Linux/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
     if [[ "$CLEAN" == "y" ]]; then
+        separator
         quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
+        separator
         rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
     fi
 }
 
 abort ()
 {
-    $(pwd)
+    cd -
 
     if [[ "$LOCAL" == "y" ]]; then
         clean
     fi
 
+    separator
     quotes "Failed to Compile Kernel! Exiting"
+    separator
 
     exit -1
 }
@@ -54,6 +56,7 @@ check ()
 }
 
 submodule () {
+    separator
     quotes "Fetch all Submodules Update"
 
     git submodule update -f -q --init --recursive > /dev/null
@@ -112,7 +115,7 @@ while [[ $# -gt 0 ]]; do
                 NEUTRON="$2"
                 shift 2
             else
-                NEUTRON=10032024
+                NEUTRON=42069420
                 shift
             fi
             ;;
@@ -127,7 +130,7 @@ if [ -z $MODEL ]; then
     MODEL=d2s
 fi
 
-KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
+KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
@@ -169,9 +172,10 @@ esac
 detect_env ()
 {
     # Set Build Variable
+    separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/"
     REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
     KERNEL_NAME=BatAxe
     export KBUILD_BUILD_USER=papaL3xa
@@ -201,6 +205,16 @@ detect_env ()
 
     if [ -z $CLEAN ]; then
         CLEAN=n
+    fi
+
+    separator
+
+    if test -d "$(pwd)/AIK-Linux"; then
+        quotes "Android Image Kitchen Directory Found!"
+    else
+        quotes "Add Android Image Kitchen as Submodule"
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen $(pwd)/AIK-Linux > /dev/null && chmod +x $(pwd)/AIK-Linux/mk*
+        check "Android Image Kitchen Directory"
     fi
 
     if test -f "$(pwd)/AIK-Linux/ramdisk/dpolicy" && test -f "$(pwd)/AIK-Linux/init"; then
@@ -292,6 +306,7 @@ detect_env ()
 
 toolchain ()
 {
+    separator
     if [[ "$USE_NEUTRON" == "true" ]]; then
         NEUTRON_DATE="=$NEUTRON"
         KERNELCLANG=NeutronClang-$NEUTRON
@@ -309,7 +324,7 @@ toolchain ()
         elif [[ "$LLVM" == "16" ]]; then
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4           
+            CLANG=498229b # Clang 17.0.4         
         else
             LLVM=18
             CLANG=522817 # Clang 18.0.1
@@ -346,15 +361,21 @@ toolchain ()
             rm -rf $TOOLCHAIN_PATH
             mkdir -p $TOOLCHAIN_PATH
             quotes "Add $CLANG_INFO"
+            separator
             cd $TOOLCHAIN_PATH
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
             if ! test -f "/usr/bin/file"; then
+                separator
                 quotes "Installing File Package"
+                separator
                 sudo apt install -y file
             fi
+            separator
             quotes "Paching glibc"
+            separator
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
             cd $OLDPWD
+            separator
             check "Neutron Clang 18"
         else
             if [[ "$LLVM" == "12" ]]; then
@@ -384,10 +405,54 @@ toolchain ()
     "
 }
 
+kernelsu ()
+{
+    separator
+
+    if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then    # Set true untuk skip
+        quotes "Patching KernelSU to Kernel Tree"
+        separator
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
+        separator
+        check "KernelSU"
+    fi
+
+    if ! test -f "arch/arm64/configs/ksu.config"; then
+        quotes "Getting KernelSU Next Defconfig"
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+        check "KernelSU Next Defconfig"
+    fi
+
+    if ! test -d "drivers/kernelsu"; then
+        quotes "Add KernelSU Next as Submodule"
+        separator
+
+        if test -d "KernelSU-Next"; then
+            rm -rf Ke*
+        fi
+
+        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
+        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+        separator
+        check "KernelSU Next"
+    fi
+
+    if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then    # Set true untuk skip
+        separator
+        quotes "Patching SuSFS to Kernel Tree"
+        separator
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
+        separator
+        check "SuSFS"
+    fi
+}
+
 kernel ()
 {
     # Build Kernel Image
+    separator
     noquotes "Fetch Kernel Info"
+    separator
     noquotes "Device: $DEVICE ("$MODEL")"
     noquotes "SOC: Exynos 982$SOC"
     noquotes "Defconfig: $KERNEL_DEFCONFIG"
@@ -403,18 +468,24 @@ kernel ()
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
 
+    separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
     quotes "Generating Configuration Files"
+    separator
 
     make -j$(nproc --all) $ARGS $DEFCONFIG || abort
 
+    separator
     quotes "Building Kernel"
+    separator
 
     make -j$(nproc --all) $ARGS || abort
 
+    separator
     quotes "Finished Kernel Build!"
+    separator
 
     rm -rf build/out/$MODEL
     mkdir -p build/out/$MODEL
@@ -424,11 +495,14 @@ dtb ()
 {
     # Build DTB Image
     quotes "Building Device Tree Blob Image for Exynos 982$SOC"
+    separator
 
     ./build/mkdtimg cfg_create build/out/$MODEL/dtb_exynos982$SOC.img build/dtconfigs/exynos982$SOC.cfg -d out/arch/arm64/boot/dts/exynos
 
     # Build DTBO Image
+    separator
     quotes "Building Device Tree Blob Image for $DEVICE ($MODEL)"
+    separator
 
     ./build/mkdtimg cfg_create build/out/$MODEL/dtbo_$MODEL.img build/dtconfigs/$MODEL.cfg -d out/arch/arm64/boot/dts/samsung
 }
@@ -436,7 +510,9 @@ dtb ()
 ramdisk ()
 {
     # Build Ramdisk
+    separator
     quotes "Building Ramdisk"
+    separator
 
     rm -rf $(pwd)/AIK-Linux/s*
     mkdir -p $(pwd)/AIK-Linux/split_img
@@ -476,8 +552,11 @@ ramdisk ()
 build_zip ()
 {
     # Build Zip
+    separator
     quotes "Building Zip"
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
+        separator
+    fi
 
     pushd build > /dev/null
     rm -rf out/$MODEL/zip
@@ -506,10 +585,9 @@ build_zip ()
     sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
-    fi
-    
+
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME.Kernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME.Kernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null
@@ -527,6 +605,7 @@ rm -rf ./build.log
 (
     START=`date +%s`
 
+    separator
     quotes "Preparing Build Environment"
 
     detect_env
@@ -549,6 +628,7 @@ rm -rf ./build.log
 
     if [[ "$LOCAL" == "y" ]]; then
         clean
+        separator
     fi
 
     END=`date +%s`
@@ -556,4 +636,5 @@ rm -rf ./build.log
     let "ELAPSED=$END-$START"
 
     quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
+    separator
 ) 2>&1	| tee -a ./build.log
