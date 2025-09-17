@@ -20,7 +20,7 @@ clean ()
     separator
     quotes "Cleanup Build Files"
 
-    rm -rf o* .w* $(pwd)/AIK-Linux/s* $(pwd)/AIK-Linux/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
+    rm -rf o* .w* build/AIK/s* build/AIK/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
     if [[ "$CLEAN" == "y" ]]; then
         separator
@@ -175,7 +175,7 @@ detect_env ()
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/"
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
     REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
     KERNEL_NAME=BatAxe
     export KBUILD_BUILD_USER=papaL3xa
@@ -209,38 +209,38 @@ detect_env ()
 
     separator
 
-    if test -d "$(pwd)/AIK-Linux"; then
+    if test -d "build/AIK"; then
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen $(pwd)/AIK-Linux > /dev/null && chmod +x $(pwd)/AIK-Linux/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
-    if test -f "$(pwd)/AIK-Linux/ramdisk/dpolicy" && test -f "$(pwd)/AIK-Linux/init"; then
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
         quotes "Ramdisk Binary Found!"
     else
-        if ! test -d "$(pwd)/AIK-Linux/ramdisk"; then
-            mkdir -p $(pwd)/AIK-Linux/ramdisk
+        if ! test -d "build/AIK/ramdisk"; then
+            mkdir -p build/AIK/ramdisk
         fi
         
-        if ! test -f "$(pwd)/AIK-Linux/dpolicy"; then
+        if ! test -f "build/AIK/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o $(pwd)/AIK-Linux/ramdisk/dpolicy
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
 
-        if ! test -f "$(pwd)/AIK-Linux/init"; then
+        if ! test -f "build/AIK/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o $(pwd)/AIK-Linux/ramdisk/init && chmod +x $(pwd)/AIK-Linux/ramdisk/i*
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "$(pwd)/AIK-Linux/fstab.exynos982$SOC"; then
+    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
-        rm -rf $(pwd)/AIK-Linux/ramdisk/f*
-        curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o $(pwd)/AIK-Linux/ramdisk/fstab.exynos982$SOC
+        rm -rf build/AIK/ramdisk/f*
+        curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
         check "Fstab for Exynos 982$SOC"
     fi
 
@@ -324,10 +324,14 @@ toolchain ()
         elif [[ "$LLVM" == "16" ]]; then
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4         
-        else
-            LLVM=18
+            CLANG=498229b # Clang 17.0.4
+        elif [[ "$LLVM" == "18" ]]; then
             CLANG=522817 # Clang 18.0.1
+        elif [[ "$LLVM" == "19" ]]; then
+            CLANG=547379 # Clang 19.0.1          
+        else
+            LLVM=20
+            CLANG=536225 # Clang 20.0.0
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -409,7 +413,7 @@ kernelsu ()
 {
     separator
 
-    if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then    # Set true untuk skip
+    if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
         quotes "Patching KernelSU to Kernel Tree"
         separator
         patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
@@ -419,7 +423,7 @@ kernelsu ()
 
     if ! test -f "arch/arm64/configs/ksu.config"; then
         quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
         check "KernelSU Next Defconfig"
     fi
 
@@ -431,13 +435,13 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
+        git submodule add -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
         bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
         separator
         check "KernelSU Next"
     fi
 
-    if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then    # Set true untuk skip
+    if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
         separator
         quotes "Patching SuSFS to Kernel Tree"
         separator
@@ -514,9 +518,9 @@ ramdisk ()
     quotes "Building Ramdisk"
     separator
 
-    rm -rf $(pwd)/AIK-Linux/s*
-    mkdir -p $(pwd)/AIK-Linux/split_img
-    pushd $(pwd)/AIK-Linux/split_img > /dev/null
+    rm -rf build/AIK/s*
+    mkdir -p build/AIK/split_img
+    pushd build/AIK/split_img > /dev/null
     mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
@@ -537,7 +541,7 @@ ramdisk ()
 
     # Create Boot Image
     quotes "Calling Android Image Kitchen"
-    pushd $(pwd)/AIK-Linux > /dev/null
+    pushd build/AIK > /dev/null
 
     mkdir -p ramdisk/debug_ramdisk
     mkdir -p ramdisk/dev
