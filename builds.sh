@@ -55,16 +55,6 @@ Options:
 EOF
 }
 
-kernelsu () {
-    if [[ ! -d "drivers/kernelsu" ]]; then
-        quotes "Adding KernelSU Next Submodule"
-        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next drivers/kernelsu
-        git submodule update --init --recursive
-    fi
-    KSU_NEXT="ksu.config"
-    check "KernelSU Next"
-}
-
 #===========================================================
 # Parse CLI arguments
 #===========================================================
