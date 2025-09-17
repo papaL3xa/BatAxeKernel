@@ -32,7 +32,7 @@
 
 # How to Install
 - Flash kernel zip file via `TWRP` recovery based
-- Install `Kernel Addons` on `/sdcard/StardustKernel-Addons-Exynos9820-[version].zip` via KernelSU Next
+- Install `Kernel Addons` on `/sdcard/BatAxeKernel-Addons-Exynos9820-[version].zip` via KernelSU Next
 - Install `KernelSU Next` from [Here](https://github.com/KernelSU-Next/KernelSU-Next/releases)
 - Install `susfs4ksu module` from [Here](https://github.com/sidex15/susfs4ksu-module/releases)
 
