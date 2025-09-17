@@ -77,7 +77,7 @@ Options:
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-20) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -321,14 +321,10 @@ toolchain ()
         elif [[ "$LLVM" == "16" ]]; then
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4 
-        elif [[ "$LLVM" == "18" ]]; then
-            CLANG=522817 # Clang 18.0.1
-        elif [[ "$LLVM" == "19" ]]; then
-            CLANG=547379 # Clang 19.0.1          
+            CLANG=498229b # Clang 17.0.4           
         else
-            LLVM=20
-            CLANG=536225 # Clang 20.0.0
+            LLVM=18
+            CLANG=522817 # Clang 18.0.1
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -404,22 +400,6 @@ toolchain ()
         LLVM=1 LLVM_IAS=1 \
         $CARGS
     "
-}
-
-LOCATION=$(pwd)
-
-kernelsu ()
-{
-    # Build Setup KernelSU
-    separator
-
-    if test -d "KernelSU-Next"; then
-    	rm -rf "${LOCATION}/KernelSU-Next"
-        
-        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash - || exit 1
-		rm -rf "${LOCATION}/KernelSU-Next"
-		git clone -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git
-	fi
 }
 
 kernel ()
