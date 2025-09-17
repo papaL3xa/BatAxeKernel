@@ -418,11 +418,11 @@ kernelsu ()
     #     check "KernelSU"
     # fi
 
-    if ! test -f "arch/arm64/configs/ksu.config"; then
-        quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
-        check "KernelSU Next Defconfig"
-    fi
+    #if ! test -f "arch/arm64/configs/ksu.config"; then
+    #    quotes "Getting KernelSU Next Defconfig"
+    #    curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+    #    check "KernelSU Next Defconfig"
+    #fi
 
     if ! test -d "drivers/kernelsu"; then
         quotes "Add KernelSU Next as Submodule"
