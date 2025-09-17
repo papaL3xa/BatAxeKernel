@@ -55,6 +55,22 @@ Options:
 EOF
 }
 
+kernelsu () {
+    if test -d "KernelSU-Next"; then
+            rm -rf Ke*
+        fi
+
+    if [[ ! -d "KernelSU-Next" ]]; then
+        quotes "Adding KernelSU Next Submodule"
+        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next > /dev/null
+        git submodule update --init --recursive
+        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+    fi
+
+    KSU_NEXT="ksu.config"
+    check "KernelSU Next"
+}
+
 #===========================================================
 # Parse CLI arguments
 #===========================================================
