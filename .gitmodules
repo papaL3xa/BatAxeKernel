@@ -1,5 +1,5 @@
-[submodule "build/AIK"]
-	path = build/AIK
+[submodule "AIK-Linux"]
+	path = AIK-Linux
 	url = https://github.com/papaL3xa/Android-Image-Kitchen
 [submodule "KernelSU-Next"]
 	path = KernelSU-Next
