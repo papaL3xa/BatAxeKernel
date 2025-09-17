@@ -48,6 +48,9 @@ jobs:
         run: |
             bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -l ${{ github.event.inputs.llvm }} -r n
 
+      - name: Remove build directory
+        run: rm -rf out/
+
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
