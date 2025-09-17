@@ -20,30 +20,25 @@ noquotes ()
 
 clean ()
 {
-    separator
     quotes "Cleanup Build Files"
 
     rm -rf o* .w* $(pwd)/AIK-Linux/s* $(pwd)/AIK-Linux/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
     if [[ "$CLEAN" == "y" ]]; then
-        separator
         quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
-        separator
         rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
     fi
 }
 
 abort ()
 {
-    cd -
+    $(pwd)
 
     if [[ "$LOCAL" == "y" ]]; then
         clean
     fi
 
-    separator
     quotes "Failed to Compile Kernel! Exiting"
-    separator
 
     exit -1
 }
@@ -59,7 +54,6 @@ check ()
 }
 
 submodule () {
-    separator
     quotes "Fetch all Submodules Update"
 
     git submodule update -f -q --init --recursive > /dev/null
@@ -175,7 +169,6 @@ esac
 detect_env ()
 {
     # Set Build Variable
-    separator
 
     DATE=`date +"%Y%m%d"`
     BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
@@ -209,8 +202,6 @@ detect_env ()
     if [ -z $CLEAN ]; then
         CLEAN=n
     fi
-
-    separator
 
     if test -f "$(pwd)/AIK-Linux/ramdisk/dpolicy" && test -f "$(pwd)/AIK-Linux/init"; then
         quotes "Ramdisk Binary Found!"
@@ -301,7 +292,6 @@ detect_env ()
 
 toolchain ()
 {
-    separator
     if [[ "$USE_NEUTRON" == "true" ]]; then
         NEUTRON_DATE="=$NEUTRON"
         KERNELCLANG=NeutronClang-$NEUTRON
@@ -356,21 +346,15 @@ toolchain ()
             rm -rf $TOOLCHAIN_PATH
             mkdir -p $TOOLCHAIN_PATH
             quotes "Add $CLANG_INFO"
-            separator
             cd $TOOLCHAIN_PATH
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
             if ! test -f "/usr/bin/file"; then
-                separator
                 quotes "Installing File Package"
-                separator
                 sudo apt install -y file
             fi
-            separator
             quotes "Paching glibc"
-            separator
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
             cd $OLDPWD
-            separator
             check "Neutron Clang 18"
         else
             if [[ "$LLVM" == "12" ]]; then
@@ -403,9 +387,7 @@ toolchain ()
 kernel ()
 {
     # Build Kernel Image
-    separator
     noquotes "Fetch Kernel Info"
-    separator
     noquotes "Device: $DEVICE ("$MODEL")"
     noquotes "SOC: Exynos 982$SOC"
     noquotes "Defconfig: $KERNEL_DEFCONFIG"
@@ -423,22 +405,16 @@ kernel ()
 
     DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
 
-    separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
     quotes "Generating Configuration Files"
-    separator
 
     make -j$(nproc --all) $ARGS $DEFCONFIG || abort
 
-    separator
     quotes "Building Kernel"
-    separator
 
     make -j$(nproc --all) $ARGS || abort
 
-    separator
     quotes "Finished Kernel Build!"
-    separator
 
     rm -rf build/out/$MODEL
     mkdir -p build/out/$MODEL
@@ -448,14 +424,11 @@ dtb ()
 {
     # Build DTB Image
     quotes "Building Device Tree Blob Image for Exynos 982$SOC"
-    separator
 
     ./build/mkdtimg cfg_create build/out/$MODEL/dtb_exynos982$SOC.img build/dtconfigs/exynos982$SOC.cfg -d out/arch/arm64/boot/dts/exynos
 
     # Build DTBO Image
-    separator
     quotes "Building Device Tree Blob Image for $DEVICE ($MODEL)"
-    separator
 
     ./build/mkdtimg cfg_create build/out/$MODEL/dtbo_$MODEL.img build/dtconfigs/$MODEL.cfg -d out/arch/arm64/boot/dts/samsung
 }
@@ -463,9 +436,7 @@ dtb ()
 ramdisk ()
 {
     # Build Ramdisk
-    separator
     quotes "Building Ramdisk"
-    separator
 
     rm -rf $(pwd)/AIK-Linux/s*
     mkdir -p $(pwd)/AIK-Linux/split_img
@@ -505,10 +476,8 @@ ramdisk ()
 build_zip ()
 {
     # Build Zip
-    separator
     quotes "Building Zip"
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        separator
     fi
 
     pushd build > /dev/null
@@ -558,7 +527,6 @@ rm -rf ./build.log
 (
     START=`date +%s`
 
-    separator
     quotes "Preparing Build Environment"
 
     detect_env
@@ -581,7 +549,6 @@ rm -rf ./build.log
 
     if [[ "$LOCAL" == "y" ]]; then
         clean
-        separator
     fi
 
     END=`date +%s`
@@ -589,5 +556,4 @@ rm -rf ./build.log
     let "ELAPSED=$END-$START"
 
     quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
-    separator
 ) 2>&1	| tee -a ./build.log
