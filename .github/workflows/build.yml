@@ -8,6 +8,10 @@ on:
         description: 'Kernel Version'
         required: true
         default: 'v'
+      ksun:
+        description: 'Install KSUN ?'
+        required: true
+        default: 'y'
       llvm:
         description: 'Clang (12-18) or Neutron (Latest) Version'
         required: true
@@ -46,7 +50,7 @@ jobs:
           
       - name: Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -l ${{ github.event.inputs.llvm }} -r n
+            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r n
 
       - name: Remove build directory
         run: rm -rf out/
