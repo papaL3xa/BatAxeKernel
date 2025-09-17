@@ -214,38 +214,30 @@ detect_env ()
 
     separator
 
-    if test -d "build/AIK"; then
-        quotes "Android Image Kitchen Directory Found!"
-    else
-        quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
-        check "Android Image Kitchen Directory"
-    fi
-
-    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
+    if test -f "$(pwd)/AIK-Linux/ramdisk/dpolicy" && test -f "$(pwd)/AIK-Linux/init"; then
         quotes "Ramdisk Binary Found!"
     else
-        if ! test -d "build/AIK/ramdisk"; then
-            mkdir -p build/AIK/ramdisk
+        if ! test -d "$(pwd)/AIK-Linux/ramdisk"; then
+            mkdir -p $(pwd)/AIK-Linux/ramdisk
         fi
         
-        if ! test -f "build/AIK/dpolicy"; then
+        if ! test -f "$(pwd)/AIK-Linux/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o $(pwd)/AIK-Linux/ramdisk/dpolicy
         fi
 
-        if ! test -f "build/AIK/init"; then
+        if ! test -f "$(pwd)/AIK-Linux/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o $(pwd)/AIK-Linux/ramdisk/init && chmod +x $(pwd)/AIK-Linux/ramdisk/i*
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
+    if ! test -f "$(pwd)/AIK-Linux/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
-        rm -rf build/AIK/ramdisk/f*
-        curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
+        rm -rf $(pwd)/AIK-Linux/ramdisk/f*
+        curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o $(pwd)/AIK-Linux/ramdisk/fstab.exynos982$SOC
         check "Fstab for Exynos 982$SOC"
     fi
 
