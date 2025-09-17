@@ -413,17 +413,18 @@ kernelsu ()
 {
     separator
 
-    if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-        quotes "Patching KernelSU to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
-        separator
-        check "KernelSU"
-    fi
+    # Nonaktifkan patch KernelSU (dikomentari)
+    # if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then    # Set true untuk skip
+    #     quotes "Patching KernelSU to Kernel Tree"
+    #     separator
+    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
+    #     separator
+    #     check "KernelSU"
+    # fi
 
     if ! test -f "arch/arm64/configs/ksu.config"; then
         quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
         check "KernelSU Next Defconfig"
     fi
 
@@ -435,20 +436,21 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
+        git submodule add -b next-susfs-experimental -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
         bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
         separator
         check "KernelSU Next"
     fi
 
-    if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-        separator
-        quotes "Patching SuSFS to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
-        separator
-        check "SuSFS"
-    fi
+    # Nonaktifkan patch SuSFS (dikomentari)
+    # if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then    # Set true untuk skip
+    #     separator
+    #     quotes "Patching SuSFS to Kernel Tree"
+    #     separator
+    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
+    #     separator
+    #     check "SuSFS"
+    # fi
 }
 
 kernel ()
