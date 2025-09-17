@@ -25,7 +25,7 @@ clean ()
     separator
     quotes "Cleanup Build Files"
 
-    rm -rf o* .w* build/AIK/s* build/AIK/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
+    rm -rf o* .w* $(pwd)/AIK-Linux/s* $(pwd)/AIK-Linux/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
     if [[ "$CLEAN" == "y" ]]; then
         separator
@@ -469,9 +469,9 @@ ramdisk ()
     quotes "Building Ramdisk"
     separator
 
-    rm -rf build/AIK/s*
-    mkdir -p build/AIK/split_img
-    pushd build/AIK/split_img > /dev/null
+    rm -rf $(pwd)/AIK-Linux/s*
+    mkdir -p $(pwd)/AIK-Linux/split_img
+    pushd $(pwd)/AIK-Linux/split_img > /dev/null
     mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
@@ -492,7 +492,7 @@ ramdisk ()
 
     # Create Boot Image
     quotes "Calling Android Image Kitchen"
-    pushd build/AIK > /dev/null
+    pushd $(pwd)/AIK-Linux > /dev/null
 
     mkdir -p ramdisk/debug_ramdisk
     mkdir -p ramdisk/dev
