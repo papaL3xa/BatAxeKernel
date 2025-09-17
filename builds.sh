@@ -1,39 +1,29 @@
 #!/bin/bash
 
 #===========================================================
-# Kernel Build Script - BatAxe
+# Kernel Build Script - BatAxe (Full Ready-to-Build Version)
 #===========================================================
 
-separator () {
-    echo "---------------------------------------------------------"
-}
-
-quotes () {
-    echo "-- $1..."
-}
-
-noquotes () {
-    echo "-- $1"
-}
+separator () { echo "---------------------------------------------------------"; }
+quotes () { echo "-- $1..."; }
+noquotes () { echo "-- $1"; }
 
 clean () {
     quotes "Cleanup Build Files"
-
-    rm -rf o* .w* "$(pwd)/AIK-Linux/s*" "$(pwd)/AIK-Linux/ramdisk/f*" build/*.p* build/*er* arch/arm64/configs/"$KERNEL_DEFCONFIG" && git restore arch/arm64/configs/"$KERNEL_DEFCONFIG"
+    rm -rf o* .w* "$(pwd)/AIK-Linux/s*" "$(pwd)/AIK-Linux/ramdisk/f*" build/*.p* build/*er* arch/arm64/configs/"$KERNEL_DEFCONFIG"
+    git restore arch/arm64/configs/"$KERNEL_DEFCONFIG" 2>/dev/null
 
     if [[ "$CLEAN" == "y" ]]; then
         quotes "Revert all changes to latest commit (All uncommitted changes will be lost!)"
-        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
+        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u*
+        git clean -df
+        git reset --hard HEAD
     fi
 }
 
 abort () {
     echo "Working dir: $(pwd)"
-
-    if [[ "$LOCAL" == "y" ]]; then
-        clean
-    fi
-
+    [[ "$LOCAL" == "y" ]] && clean
     quotes "Failed to Compile Kernel! Exiting"
     exit 1
 }
@@ -66,8 +56,8 @@ EOF
 }
 
 kernelsu () {
-    quotes "Adding KernelSU Next Submodule"
-    if ! test -d "drivers/kernelsu"; then
+    if [[ ! -d "drivers/kernelsu" ]]; then
+        quotes "Adding KernelSU Next Submodule"
         git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next drivers/kernelsu
         git submodule update --init --recursive
     fi
@@ -78,34 +68,15 @@ kernelsu () {
 #===========================================================
 # Parse CLI arguments
 #===========================================================
-
 USE_NEUTRON=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --model|-m)
-            MODEL="$2"
-            shift 2
-            ;;
-        --ksu|-k)
-            KSU="$2"
-            shift 2
-            ;;
-        --ver|-v)
-            KERNEL_VERSION="$2"
-            shift 2
-            ;;
-        --rel|-r)
-            RELEASE="$2"
-            shift 2
-            ;;
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        --clean|-c)
-            CLEAN="$2"
-            shift 2
-            ;;
+        --model|-m) MODEL="$2"; shift 2 ;;
+        --ksu|-k) KSU="$2"; shift 2 ;;
+        --ver|-v) KERNEL_VERSION="$2"; shift 2 ;;
+        --rel|-r) RELEASE="$2"; shift 2 ;;
+        --help|-h) usage; exit 0 ;;
+        --clean|-c) CLEAN="$2"; shift 2 ;;
         --llvm|-l)
             LLVM="$2"
             if [[ -z "$LLVM" ]]; then
@@ -118,17 +89,13 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
-        *)
-            usage
-            exit 1
-            ;;
+        *) usage; exit 1 ;;
     esac
 done
 
 #===========================================================
 # Default values
 #===========================================================
-
 [[ -z "$MODEL" ]] && MODEL=d2s
 [[ -z "$KSU" ]] && KSU=y
 [[ -z "$CLEAN" ]] && CLEAN=n
@@ -149,9 +116,8 @@ case $MODEL in
 esac
 
 #===========================================================
-# Detect Environment
+# Detect Environment & download dependencies
 #===========================================================
-
 detect_env () {
     DATE=$(date +"%Y%m%d")
     BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
@@ -161,33 +127,30 @@ detect_env () {
     export KBUILD_BUILD_HOST=BatAxeKernel
 
     DEVICE=$([[ "$SOC" == "5" ]] && echo "Note10" || echo "S10")
+    [[ ! -z $RELEASE ]] && quotes "Running on GitHub Actions" && echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV || LOCAL=y
 
-    if [ ! -z $RELEASE ]; then
-        quotes "Running on GitHub Actions"
-        echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
-    else
-        quotes "Running on Local Machine"
-        LOCAL=y
-    fi
-
-    # Ensure required directories
+    # Create directories
     mkdir -p "$(pwd)/AIK-Linux/ramdisk" build/dtconfigs build/out/$MODEL build/out/$MODEL/zip build/export
 
-    [[ -z "$KSU" ]] && KSU=y
-    [[ -z "$CLEAN" ]] && CLEAN=n
+    # Download required ramdisk files
+    [[ ! -f "$(pwd)/AIK-Linux/ramdisk/dpolicy" ]] && curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o "$(pwd)/AIK-Linux/ramdisk/dpolicy"
+    [[ ! -f "$(pwd)/AIK-Linux/ramdisk/init" ]] && curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o "$(pwd)/AIK-Linux/ramdisk/init" && chmod +x "$(pwd)/AIK-Linux/ramdisk/init"
+    [[ ! -f "$(pwd)/AIK-Linux/ramdisk/fstab.exynos982$SOC" ]] && curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o "$(pwd)/AIK-Linux/ramdisk/fstab.exynos982$SOC"
 
-    # KernelSU check
-    if [[ "$KSU" == "y" ]]; then
-        KSU_NEXT="ksu.config"
-    fi
+    # Download required binaries
+    [[ ! -f "build/mkdtimg" ]] && curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
+    [[ ! -f "build/module-binary" ]] && curl -LSs "https://raw.githubusercontent.com/Zackptg5/MMT-Extended/refs/heads/master/META-INF/com/google/android/update-binary" -o build/module-binary
+    [[ ! -f "build/update-binary" ]] && curl -LSs "${REPO_URL}toolchains/update-binary" -o build/update-binary
+    [[ ! -f "build/updater-script" ]] && curl -LSs "${BUILD_URL}updater-script" -o build/updater-script
+    [[ ! -f "build/module.prop" ]] && curl -LSs "${BUILD_URL}module.prop" -o build/module.prop
+    [[ ! -f "build/system.prop" ]] && curl -LSs "${BUILD_URL}system.prop" -o build/system.prop
 
-    # Add more environment setup here as needed
+    check "Environment Setup & Dependencies"
 }
 
 #===========================================================
-# Toolchain setup
+# Toolchain setup (Neutron Clang included)
 #===========================================================
-
 toolchain () {
     if [[ "$USE_NEUTRON" == "true" ]]; then
         KERNELCLANG="NeutronClang-$LLVM"
@@ -195,7 +158,12 @@ toolchain () {
         TOOLCHAIN_PATH="toolchain/neutron-$LLVM"
         mkdir -p "$TOOLCHAIN_PATH"
         quotes "Download & Setup Neutron Clang ($LLVM)"
-        # Antman script here
+
+        pushd "$TOOLCHAIN_PATH" > /dev/null
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S=$LLVM
+        check "Neutron Clang Setup"
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
+        popd > /dev/null
     else
         KERNELCLANG="Clang$LLVM"
         CLANG_INFO="Clang $LLVM"
@@ -208,7 +176,6 @@ toolchain () {
 #===========================================================
 # Build Kernel
 #===========================================================
-
 kernel () {
     noquotes "Fetch Kernel Info"
     noquotes "Device: $DEVICE ($MODEL)"
@@ -221,10 +188,8 @@ kernel () {
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/"$KERNEL_DEFCONFIG"
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/"$KERNEL_DEFCONFIG"
 
-    DEFCONFIG="$KERNEL_DEFCONFIG $KSU_NEXT"
-
     quotes "Building Kernel Using $KERNEL_DEFCONFIG"
-    make -j$(nproc --all) ARCH=arm64 O=out $DEFCONFIG || abort
+    make -j$(nproc --all) ARCH=arm64 O=out $KERNEL_DEFCONFIG || abort
     make -j$(nproc --all) ARCH=arm64 O=out || abort
     quotes "Finished Kernel Build!"
 }
@@ -232,11 +197,9 @@ kernel () {
 #===========================================================
 # Build DTB
 #===========================================================
-
 dtb () {
     quotes "Building Device Tree Blob Image for Exynos 982$SOC"
     ./build/mkdtimg cfg_create build/out/$MODEL/dtb_exynos982$SOC.img build/dtconfigs/exynos982$SOC.cfg -d out/arch/arm64/boot/dts/exynos
-
     quotes "Building DTBO Image for $DEVICE ($MODEL)"
     ./build/mkdtimg cfg_create build/out/$MODEL/dtbo_$MODEL.img build/dtconfigs/$MODEL.cfg -d out/arch/arm64/boot/dts/samsung
 }
@@ -244,7 +207,6 @@ dtb () {
 #===========================================================
 # Build Ramdisk
 #===========================================================
-
 ramdisk () {
     quotes "Building Ramdisk"
     mkdir -p "$(pwd)/AIK-Linux/split_img"
@@ -271,7 +233,6 @@ ramdisk () {
 #===========================================================
 # Build Zip
 #===========================================================
-
 build_zip () {
     quotes "Building Zip"
     NAME="BatAxe-$MODEL-$KERNEL_VERSION-$DATE.zip"
@@ -285,7 +246,6 @@ build_zip () {
 #===========================================================
 # Main
 #===========================================================
-
 rm -rf ./build.log
 (
     START=$(date +%s)
@@ -307,6 +267,5 @@ rm -rf ./build.log
 
     END=$(date +%s)
     ELAPSED=$((END-START))
-
     quotes "Total Compile Time: $((ELAPSED / 60)) Minutes and $((ELAPSED % 60)) Seconds"
 ) 2>&1 | tee -a ./build.log
