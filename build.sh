@@ -414,7 +414,7 @@ kernelsu ()
     separator
 
     # Nonaktifkan patch KernelSU (dikomentari)
-    # if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then    # Set true untuk skip
+    # if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
     #     quotes "Patching KernelSU to Kernel Tree"
     #     separator
     #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
@@ -443,7 +443,7 @@ kernelsu ()
     fi
 
     # Nonaktifkan patch SuSFS (dikomentari)
-    # if [ -z "$SKIP_SUSFS" ] && ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then    # Set true untuk skip
+    # if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
     #     separator
     #     quotes "Patching SuSFS to Kernel Tree"
     #     separator
