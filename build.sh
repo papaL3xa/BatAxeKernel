@@ -107,7 +107,7 @@ while [[ $# -gt 0 ]]; do
         --llvm|-l)
             USE_NEUTRON=true
 
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
+            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 18 ]]; then
                 USE_NEUTRON=false
             fi
 
@@ -115,7 +115,7 @@ while [[ $# -gt 0 ]]; do
                 NEUTRON="$2"
                 shift 2
             else
-                NEUTRON=42069420
+                NEUTRON=10032024
                 shift
             fi
             ;;
@@ -432,8 +432,8 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -b next-susfs-experimental https://github.com/sidex15/KernelSU-Next.git
-        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+        git submodule add -f -q https://github.com/GoRhanHee/KernelSU-Next.git > /dev/null
+        curl -LSs "https://raw.githubusercontent.com/GoRhanHee/KernelSU-Next/next-susfs-experimental/kernel/setup.sh" | bash -
         separator
         check "KernelSU Next"
     fi
