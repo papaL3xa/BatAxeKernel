@@ -21,15 +21,15 @@ on:
         required: true
         type: choice
         options: 
-          - ["d1"]
-          - ["d1xks"]
-          - ["d2s"]
-          - ["d2x"]
-          - ["beyond0lte"]
-          - ["beyond1lte"]
-          - ["beyond2lte"]
-          - ["beyondx"]
-          - ["d1", "d1xks", "d2s", "d2x", "beyond0lte", "beyond1lte", "beyond2lte", "beyondx"]
+          - d1
+          - d1xks
+          - d2s
+          - d2x
+          - beyond0lte
+          - beyond1lte
+          - beyond2lte
+          - beyondx
+          - d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx
 
 jobs:
   build:
