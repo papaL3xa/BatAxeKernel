@@ -1,8 +1,7 @@
 <div align="center">
-  <img loading="lazy" src="https://raw.githubusercontent.com/StardustMod/build/refs/heads/main/assets/banner.png"/>
+  <img loading="lazy" src="https://github.com/papaL3xa/builds/blob/brain/KARUNG/bataxe.png"/>
 </div>
-
-<h4 align="center">StardustKernel 💫 for Galaxy S10/Note10 devices.</h4>
+<h1 align="center">BatAxeKernel for Galaxy S10/Note10 devices.</h1>
 
 # Features
 
@@ -11,8 +10,8 @@
 - Implement Ramdisk (No more root loss after reboot)
 - Compile with Neutron Clang 19.0.0 (10032024)
 - Nuke all Samsung's Security Feature, Logs & Debug in the Kernel
-- KernelSU Next
-- SuSFS
+- KernelSU Next v-1.5.9 (12871) [Update]
+- SuSFS v-1.5.9 [Update]
 - WireGuard
 - CPU Input Boost
 - Voltage Control
@@ -21,8 +20,9 @@
 - OC for Little, Mid and Big CPU
 - HZ Tick Set at 25Hz
 - Boeffla Wakelock Blocker
+- Wi-Fi 6 Hotspot support [New]
 - Bypass Charging (Use power directly from charger)
-- ThunderTweaks Support (You can get ThunderTweaks [here](https://github.com/StardustMod/build/raw/refs/heads/main/ThunderTweaks_v1.1.1.5.apk) to customize kernel features)
+- ThunderTweaks Support (You can get ThunderTweaks [here](https://github.com/papaL3xa/builds/releases/tag/apk) to customize kernel features)
 
 # Tested On
 
@@ -33,7 +33,7 @@
 
 # How to Install
 - Flash kernel zip file via `TWRP` recovery based
-- Install `Kernel Addons` on `/sdcard/StardustKernel-Addons-Exynos9820-[version].zip` via KernelSU Next
+- Install `Kernel Addons` on `/sdcard/BatAxeKernel-Addons-Exynos9820-[version].zip` via KernelSU Next
 - Install `KernelSU Next` from [Here](https://github.com/KernelSU-Next/KernelSU-Next/releases)
 - Install `susfs4ksu module` from [Here](https://github.com/sidex15/susfs4ksu-module/releases)
 
@@ -61,13 +61,13 @@ sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommen
 2. Clone this repository
 
 ```
-git clone https://github.com/StardustMod/android_kernel_samsung_exynos9820
+git clone https://github.com/papaL3xa/BatAxeKernel.git
 ```
 
 3. Build for your device (To list all build script command run `./build.sh -h`)
 
 ```
-./build.sh -m [device_codename] -l [clang_version - (12-18)]
+./build.sh -m [device_codename] -l [clang_version - (12-20)]
 ```
 
 > **Example:** Build for Galaxy Note10+ (d2s) with Neutron Clang latest version
@@ -91,7 +91,7 @@ git clone https://github.com/StardustMod/android_kernel_samsung_exynos9820
 4. After build you can find the kernel zip file at the location below
 
 ```
-build/export/StardustKernel-Unofficial-[yyyyMMdd]-[device_model]-[device_codename]-[clang_version].zip
+build/export/BatAxeKernel-Unofficial-[yyyyMMdd]-[device_model]-[device_codename]-[clang_version].zip
 ```
 
 5. Flash using TWRP based recovery
