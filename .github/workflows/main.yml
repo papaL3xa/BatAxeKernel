@@ -1,5 +1,5 @@
 name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
 
 on:
   workflow_dispatch:
