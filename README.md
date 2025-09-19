@@ -1,7 +1,7 @@
 <div align="center">
   <img loading="lazy" src="https://github.com/papaL3xa/builds/blob/brain/KARUNG/bataxe.png"/>
 </div>
-<h1 align="center">BatAxeKernel for Galaxy S10/Note10 devices.</h1>
+<h1 align="center">BatAxeKernel 🦇 for Galaxy S10/Note10 devices.</h1>
 
 # Features
 
@@ -10,8 +10,8 @@
 - Implement Ramdisk (No more root loss after reboot)
 - Compile with Neutron Clang 19.0.0 (10032024)
 - Nuke all Samsung's Security Feature, Logs & Debug in the Kernel
-- KernelSU Next v-1.5.9 (12871) [Update]
-- SuSFS v-1.5.9 [Update]
+- KernelSU Next v-1.5.9 (12871) $${\color{green}UPDATE}$$
+- SuSFS v-1.5.9 $${\color{green}UPDATE}$$
 - WireGuard
 - CPU Input Boost
 - Voltage Control
@@ -20,7 +20,7 @@
 - OC for Little, Mid and Big CPU
 - HZ Tick Set at 25Hz
 - Boeffla Wakelock Blocker
-- Wi-Fi 6 Hotspot support [New]
+- Wi-Fi 6 Hotspot support $${\color{green}NEW}$$
 - Bypass Charging (Use power directly from charger)
 - ThunderTweaks Support (You can get ThunderTweaks [here](https://github.com/papaL3xa/builds/releases/tag/apk) to customize kernel features)
 
@@ -39,16 +39,16 @@
 
 # Supported Devices:
 
-|        Name       |  Codename  |    Model   |
-:------------------:|:----------:|:----------:|
-|    Galaxy S10e    | beyond0lte | SM-G970F/N |
-|     Galaxy S10    | beyond1lte | SM-G973F/N |
-|    Galaxy S10+    | beyond2lte | SM-G975F/N |
-|   Galaxy S10 5G   |   beyondx  | SM-G977B/N |
-|   Galaxy Note10   |     d1     | SM-N970F/N |
-|  Galaxy Note10 5G |    d1xks   |  SM-N971N  |
-|   Galaxy Note10+  |     d2s    | SM-N975F/N |
-| Galaxy Note10+ 5G |     d2x    | SM-N976B/N |
+|        Name       |  Codename  |    Model   |    Status  |
+:------------------:|:----------:|:----------:|:----------:|
+|    Galaxy S10e    | beyond0lte | SM-G970F/N |     ✅    |
+|     Galaxy S10    | beyond1lte | SM-G973F/N |     ✅    |
+|    Galaxy S10+    | beyond2lte | SM-G975F/N |     ✅    |
+|   Galaxy S10 5G   |   beyondx  | SM-G977B/N |     ✅    |
+|   Galaxy Note10   |     d1     | SM-N970F/N |     ✅    |
+|  Galaxy Note10 5G |    d1xks   |  SM-N971N  |     ✅    |
+|   Galaxy Note10+  |     d2s    | SM-N975F/N |     ✅    |
+| Galaxy Note10+ 5G |     d2x    | SM-N976B/N |     ✅    |
 
 # How to Build
 
@@ -107,3 +107,5 @@ build/export/BatAxeKernel-Unofficial-[yyyyMMdd]-[device_model]-[device_codename]
 - [`Ocin4ever`](https://github.com/Ocin4ever) & [`ExtremeXT`](https://github.com/ExtremeXT) for [ExtremeKernel](https://github.com/Ocin4ever/ExtremeKernel)
 - [`ThunderStorms21th`](https://github.com/ThunderStorms21th) for [ThunderStormS Kernel](https://github.com/ThunderStorms21th/S10-source)
 - [`evdenis`](https://github.com/evdenis) for [CruelKernel](https://github.com/CruelKernel/samsung-exynos9820)
+- [`oItsMineZ`](https://github.com/oItsMineZ) for [stardust-EOL](https://github.com/oItsMineZ)
+- [`GoRhanHee`](https://github.com/GoRhanHee) for [KSU-N for NON-GKI](https://github.com/GoRhanHee/KernelSU-Next) and for [commit for KSUN & SUSFS](https://github.com/GoRhanHee/exynos9820_samsung_Kernel/commits/ramdisk_9820/)
