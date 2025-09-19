@@ -91,7 +91,7 @@ git clone https://github.com/papaL3xa/BatAxeKernel.git
 4. After build you can find the kernel zip file at the location below
 
 ```
-build/export/BatAxeKernel-Unofficial-[yyyyMMdd]-[device_model]-[device_codename]-[clang_version].zip
+build/export/BatAxeKernel-[kernel_version]-[yyyyMMdd]-[device_model]-[device_codename]-[clang_version].zip
 ```
 
 5. Flash using TWRP based recovery
