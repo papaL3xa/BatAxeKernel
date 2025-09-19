@@ -79,11 +79,11 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "${{ github.event.inputs.tag }}"
-          draft: true
+          name: "BatAxeKernel-${{ github.event.inputs.tag }}"
+          draft: false
           generateReleaseNotes: true
           makeLatest: true
-          skipIfReleaseExists: true
+          skipIfReleaseExists: false
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
           removeArtifacts: true
           artifacts: "artifacts/**/*.zip"
