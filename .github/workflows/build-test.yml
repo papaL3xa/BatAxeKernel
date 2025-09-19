@@ -29,7 +29,7 @@ on:
           - ["beyond1lte"]
           - ["beyond2lte"]
           - ["beyondx"]
-          - [beyond2, beyond1, beyond0, beyondxks, d1, d2s, d1x, d2x]
+          - ["d1", "d1xks", "d2s", "d2x", "beyond0lte", "beyond1lte", "beyond2lte", "beyondx"]
 
 jobs:
   build:
