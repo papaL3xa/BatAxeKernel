@@ -70,7 +70,6 @@ Usage: $(basename "$0") [options]
 Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -w, --wksu [y/N]       Include Wild-KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
     -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
@@ -86,10 +85,6 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --ksu|-k)
-            KSU_OPTION="$2"
-            shift 2
-            ;;
-        --wksu|-w)
             KSU_OPTION="$2"
             shift 2
             ;;
