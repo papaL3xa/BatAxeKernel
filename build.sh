@@ -409,6 +409,14 @@ toolchain ()
     "
 }
 
+submodule () {
+    separator
+    quotes "Fetch all Submodules Update"
+
+    git submodule update -f -q --init --recursive > /dev/null
+    check "Submodules"
+}
+
 kernelsu ()
 {
     separator
