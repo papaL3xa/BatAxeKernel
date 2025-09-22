@@ -10,8 +10,8 @@
 - Implement Ramdisk (No more root loss after reboot)
 - Compile with Neutron Clang 19.0.0 (10032024)
 - Nuke all Samsung's Security Feature, Logs & Debug in the Kernel
-- KernelSU Next v-1.5.9 (12871) $${\color{green}UPDATE}$$
-- SuSFS v-1.5.9 $${\color{green}UPDATE}$$
+- KernelSU Next
+- SuSFS 
 - WireGuard
 - CPU Input Boost
 - Voltage Control
@@ -82,10 +82,10 @@ git clone https://github.com/papaL3xa/BatAxeKernel.git
 > ./build.sh -m beyond2lte -l 10032024
 > ```
 
-> **Example:** Build for Galaxy Note10 (d1) with Clang 18
+> **Example:** Build for Galaxy Note10 (d1) with Clang 20
 > 
 > ```
-> ./build.sh -m d1 -l 18
+> ./build.sh -m d1 -l 20
 > ```
 
 4. After build you can find the kernel zip file at the location below
