@@ -1,5 +1,5 @@
 name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} with Clang v.${{ github.event.inputs.llvm }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }} with Clang v.${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -78,8 +78,8 @@ jobs:
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ github.event.inputs.tag }}
-          name: "BatAxeKernel-${{ github.event.inputs.tag }}"
+          tag: ${{ github.event.inputs.version }}
+          name: "BatAxeKernel-${{ github.event.inputs.version }} for OneUI4.X"
           draft: false
           generateReleaseNotes: true
           makeLatest: true
