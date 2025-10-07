@@ -446,8 +446,8 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -f -q https://github.com/GoRhanHee/KernelSU-Next.git KernelSU-Next > /dev/null
-        curl -LSs "https://raw.githubusercontent.com/GoRhanHee/KernelSU-Next/refs/heads/next-susfs/kernel/setup.sh" | bash -
+        git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/KernelSU-Next-gorhanhee/refs/heads/3defcc28/kernel/setup.sh" | bash -
         separator
         check "KernelSU Next"
     fi
