@@ -289,11 +289,11 @@ static DEFINE_MUTEX (thermal_suspend_lock);
 static bool is_cpu_hotplugged_out;
 
 /*Overclocking little cores to 2106 MHz*/
-unsigned long arg_cpu_max_c1 = 2106000;
+static unsigned long arg_cpu_max_c1 = 2106000;
 /*Overclocking little cores to 2504 MHz*/
-unsigned long arg_cpu_max_c2 = 2504000;
+static unsigned long arg_cpu_max_c2 = 2504000;
 /*Overclocking little cores to 3016 MHz*/
-unsigned long arg_cpu_max_c3 = 3016000;
+static unsigned long arg_cpu_max_c3 = 3016000;
 
 /* list of multiple instance for each thermal sensor */
 static LIST_HEAD(dtm_dev_list);
