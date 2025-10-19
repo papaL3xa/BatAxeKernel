@@ -8,7 +8,11 @@
 #include <linux/path.h>
 #include <linux/susfs_def.h>
 
+<<<<<<< HEAD
 #define SUSFS_VERSION "v1.5.11"
+=======
+#define SUSFS_VERSION "v1.5.12"
+>>>>>>> 58ea09ba1c83 ([PATCH] treewide: Implement susfs v1.5.12)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
 #define SUSFS_VARIANT "NON-GKI"
 #else
