@@ -37,6 +37,7 @@ on:
           - '20'
           - '21'
           - 'latest'
+      devices:    
         description: 'Devices'
         required: true
         default: '["d1", "d1xks", "d2s", "d2x", "beyond0lte", "beyond1lte", "beyond2lte", "beyondx"]'
@@ -78,11 +79,11 @@ jobs:
           
       - name: Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r n
+            bash build.sh -m ${{ github.event.inputs.devices }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r n
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
-          path: "build/out/${{ matrix.device }}/zip/*"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-$${{ github.event.inputs.devices }}-Clang${{ github.event.inputs.llvm }}"
+          path: "build/out/${{ github.event.inputs.devices }}/zip/*"
           if-no-files-found: error
