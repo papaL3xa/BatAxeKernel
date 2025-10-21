@@ -1,4 +1,4 @@
-name: Build BatAxeKernel (Multiple)
+name: Build BatAxeKernel(Release)
 run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.llvm }}'
 
 on:
@@ -53,8 +53,9 @@ on:
       devices:
         description: 'Select devices to build'
         required: true
-        type: multiple choice
+        type: choice
         options:
+          - all
           - d1
           - d1xks
           - d2s
@@ -63,24 +64,33 @@ on:
           - beyond1lte
           - beyond2lte
           - beyondx
-        default:
-          - d1
-          - d1xks
-          - d2s
-          - d2x
-          - beyond0lte
-          - beyond1lte
-          - beyond2lte
-          - beyondx
+        default: 'all'
 
 jobs:
+  validate-devices:
+    runs-on: ubuntu-latest
+    outputs:
+      device_list: ${{ steps.validate.outputs.device_list }}
+    steps:
+      - name: Validate and parse device input
+        id: validate
+        run: |
+          if [ "${{ github.event.inputs.devices }}" = "all" ]; then
+            DEVICE_LIST='["d1", "d1xks", "d2s", "d2x", "beyond0lte", "beyond1lte", "beyond2lte", "beyondx"]'
+          else
+            DEVICE_LIST="[\"${{ github.event.inputs.devices }}\"]"
+          fi
+          echo "device_list=$DEVICE_LIST" >> $GITHUB_OUTPUT
+          echo "Selected devices: $DEVICE_LIST"
+
   build:
+    needs: validate-devices
     runs-on: ubuntu-latest
     permissions:
       contents: write
     strategy:
       matrix:
-        device: ${{ github.event.inputs.devices }}
+        device: ${{ fromJson(needs.validate-devices.outputs.device_list) }}
 
     steps:
       - name: Checkout Tree
@@ -95,9 +105,10 @@ jobs:
       - name: Set Environment Variable
         run: |
           SHA=$(git rev-parse --short ${{ github.sha }})
-          echo BUILD_DATE=$(date +'%Y%m%d') >> $GITHUB_ENV
-          echo COMMIT_SHA=$SHA >> $GITHUB_ENV
-          echo BUILD_KERNEL_VERSION=${{ github.event.inputs.version }} >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+          echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
+          echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
           
       - name: Building Kernel
         run: |
@@ -106,7 +117,7 @@ jobs:
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
@@ -116,7 +127,7 @@ jobs:
           cat << EOF > $BUILD_INFO_FILE
           ### Build Summary for ${{ matrix.device }}
 
-          **Device:** ${{ env.BUILD_DEVICE }} (${{ matrix.device }})
+          **Device:** ${{ matrix.device }}
           **Kernel Version:** ${{ env.BUILD_KERNEL_VERSION }}
           **Build Date:** ${{ env.BUILD_DATE }}
           **Commit SHA:** ${{ env.COMMIT_SHA }}
@@ -127,9 +138,6 @@ jobs:
 
           ---
           EOF
-          
-          # Upload build summary as artifact
-          echo "BUILD_INFO_FILE=$BUILD_INFO_FILE" >> $GITHUB_ENV
 
       - name: Upload Build Summary
         uses: actions/upload-artifact@v4
@@ -139,7 +147,7 @@ jobs:
           retention-days: 1
 
   generate-release-body:
-    needs: build
+    needs: [validate-devices, build]
     runs-on: ubuntu-latest
     outputs:
       release_body: ${{ steps.generate-body.outputs.release_body }}
@@ -153,39 +161,65 @@ jobs:
       - name: Generate Release Body
         id: generate-body
         run: |
-          RELEASE_BODY="# BatAxe Kernel ${{ github.event.inputs.version }} Release\n\n"
-          RELEASE_BODY+="**Build Information:**\n"
-          RELEASE_BODY+="- **Kernel Version:** ${{ github.event.inputs.version }}\n"
-          RELEASE_BODY+="- **Build Date:** $(date +'%Y-%m-%d')\n"
-          RELEASE_BODY+="- **Toolchain:** Clang ${{ github.event.inputs.llvm }}\n"
-          RELEASE_BODY+="- **KernelSU Next:** ${{ github.event.inputs.ksun }}\n"
-          RELEASE_BODY+="- **Commit:** ${{ env.COMMIT_SHA }}\n\n"
+          RELEASE_BODY="# BatAxe Kernel ${{ github.event.inputs.version }} Release"
+          RELEASE_BODY+=$'\n\n'
+          RELEASE_BODY+="**Build Information:**"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- **Kernel Version:** ${{ github.event.inputs.version }}"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- **Build Date:** $(date +'%Y-%m-%d')"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- **Toolchain:** Clang ${{ github.event.inputs.llvm }}"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- **KernelSU Next:** ${{ github.event.inputs.ksun }}"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- **Commit:** ${{ env.COMMIT_SHA }}"
+          RELEASE_BODY+=$'\n\n'
           
-          RELEASE_BODY+="## Built Devices\n\n"
-          RELEASE_BODY+="Selected devices: ${{ join(github.event.inputs.devices, ', ') }}\n\n"
+          RELEASE_BODY+="## Built Devices"
+          RELEASE_BODY+=$'\n\n'
+          if [ "${{ github.event.inputs.devices }}" = "all" ]; then
+            RELEASE_BODY+="All devices built"
+          else
+            RELEASE_BODY+="Selected device: ${{ github.event.inputs.devices }}"
+          fi
+          RELEASE_BODY+=$'\n\n'
           
           # Combine all build summaries
           for summary_file in summaries/build-summary-*/*.md; do
             if [ -f "$summary_file" ]; then
-              RELEASE_BODY+="$(cat "$summary_file")\n\n"
+              RELEASE_BODY+="$(cat "$summary_file")"
+              RELEASE_BODY+=$'\n\n'
             fi
           done
           
-          RELEASE_BODY+="## Changelog\n\n"
-          RELEASE_BODY+="\`\`\`\n"
-          RELEASE_BODY+="## Add your changelog here or fetch from git\n"
-          RELEASE_BODY+="## git log --oneline --since=\"1 month ago\"\n"
-          RELEASE_BODY+="\`\`\`\n\n"
+          RELEASE_BODY+="## Changelog"
+          RELEASE_BODY+=$'\n\n'
+          RELEASE_BODY+='```'
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="## Add your changelog here or fetch from git"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="## git log --oneline --since=\"1 month ago\""
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+='```'
+          RELEASE_BODY+=$'\n\n'
           
-          RELEASE_BODY+="## Installation\n\n"
-          RELEASE_BODY+="1. Download the appropriate zip file for your device\n"
-          RELEASE_BODY+="2. Flash via custom recovery (TWRP/OrangeFox)\n"
-          RELEASE_BODY+="3. Reboot and enjoy!\n\n"
+          RELEASE_BODY+="## Installation"
+          RELEASE_BODY+=$'\n\n'
+          RELEASE_BODY+="1. Download the appropriate zip file for your device"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="2. Flash via custom recovery (TWRP/OrangeFox)"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="3. Reboot and enjoy!"
+          RELEASE_BODY+=$'\n\n'
           
-          RELEASE_BODY+="## Notes\n\n"
-          RELEASE_BODY+="- Make sure you're on the latest firmware\n"
-          RELEASE_BODY+="- Backup your current kernel before flashing\n"
-          RELEASE_BODY+="- Report any issues on GitHub Issues\n"
+          RELEASE_BODY+="## Notes"
+          RELEASE_BODY+=$'\n\n'
+          RELEASE_BODY+="- Make sure you're on the latest firmware"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- Backup your current kernel before flashing"
+          RELEASE_BODY+=$'\n'
+          RELEASE_BODY+="- Report any issues on GitHub Issues"
           
           # Escape newlines for output
           RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
@@ -219,15 +253,15 @@ jobs:
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ github.event.inputs.tag }}
+          tag: ${{ github.event.inputs.tag }}${{ github.event.inputs.version }}
           name: "BatAxe Kernel ${{ github.event.inputs.version }}"
-          body: ${{ needs.generate-release-body.outputs.release_body }}
+          body: "${{ needs.generate-release-body.outputs.release_body }}"
           draft: false
           prerelease: false
           generateReleaseNotes: false
           makeLatest: true
           skipIfReleaseExists: true
-          token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
+          token: ${{ github.event.inputs.token || github.token }}
           artifacts: "artifacts/**/*.zip"
           artifactErrorsFailBuild: true
 
