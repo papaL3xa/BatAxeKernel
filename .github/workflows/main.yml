@@ -114,7 +114,7 @@ jobs:
         run: |
             bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
 
-       - name: Upload Kernel
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
           name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
