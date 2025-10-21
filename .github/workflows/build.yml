@@ -40,17 +40,17 @@ on:
       devices:    
         description: 'Devices'
         required: true
-        default: 'd1'
+        default: '["d1"]'
         type: choice
         options:
-          - 'd1'
-          - 'd1xks'
-          - 'd2'
-          - 'd2x'
-          - 'beyond0lte'
-          - 'beyond1lte'
-          - 'beyond2lte'
-          - 'beyondx'
+          - '["d1"]'
+          - '["d1xks"]'
+          - '["d2s"]'
+          - '["d2x"]'
+          - '["beyond0lte"]'
+          - '["beyond1lte"]'
+          - '["beyond2lte"]'
+          - '["beyondx"]'
 
 jobs:
   build:
