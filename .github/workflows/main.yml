@@ -1,5 +1,5 @@
 name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }} with Clang v.${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -12,10 +12,42 @@ on:
         description: 'Install KernelSU-Next ?'
         required: true
         default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
         description: 'Clang (12-20) or Neutron (Latest) Version'
         required: true
         default: 'latest'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - 'latest'
+      devices:
+        description: 'Devices to build for'
+        required: true
+        default: '["d1"]'
+        type: choice
+        options:
+          - '["d1"]'
+          - '["d1xks"]'
+          - '["d2s"]'
+          - '["d2x"]'
+          - '["beyond0lte"]'
+          - '["beyond1lte"]'
+          - '["beyond2lte"]'
+          - '["beyondx"]'
+          - '["d1", "d1xks", "d2s", "d2x", "beyond0lte", "beyond1lte", "beyond2lte", "beyondx"]'
       tag:
         description: 'Release Tag'
         required: true
@@ -33,33 +65,59 @@ jobs:
       contents: write
     strategy:
       matrix:
-        device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
+        device: ${{ fromJSON(github.event.inputs.devices) }}
 
     steps:
       - name: Checkout Tree
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          submodules: recursive
+
+      - name: Cache APT packages
+        uses: actions/cache@v3
+        id: cache-apt
+        with:
+          path: |
+            /var/cache/apt
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('build.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
 
       - name: Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
-          
+          sudo apt update
+          if [ "${{ steps.cache-apt.outputs.cache-hit }}" != 'true' ]; then
+            echo "Cache tidak ditemukan, installing packages..."
+            sudo apt install --no-install-recommends -y \
+              build-essential \
+              gcc-aarch64-linux-gnu \
+              clang lld llvm \
+              file curl wget git \
+              zip unzip \
+              libssl-dev bc flex bison \
+              python3
+          else
+            echo "Cache ditemukan, melewatkan installasi packages..."
+          fi
+
       - name: Set Environment Variable
         run: |
-          SHA=$(git rev-parse --short ${{ github.sha }})
-          echo BUILD_DATE=$(date +'%Y%m%d') >> $GITHUB_ENV
-          echo COMMIT_SHA=$SHA >> $GITHUB_ENV
-          echo BUILD_KERNEL_VERSION=${{ github.event.inputs.version }} >> $GITHUB_ENV
+          SHA=$(git rev-parse --short $GITHUB_SHA)
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+          echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
+          echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
           
       - name: Building Kernel
         run: |
             bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
 
-      - name: Upload Kernel
+       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
@@ -74,21 +132,47 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: BatAxeKernel-*
+          merge-multiple: true
+
+      - name: List Downloaded Artifacts
+        run: |
+          echo "Downloaded artifacts structure:"
+          find artifacts -type f -name "*.zip" | sort
+          echo "Total files: $(find artifacts -type f -name "*.zip" | wc -l)"
 
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "${{ github.event.inputs.tag }}"
-          draft: true
-          generateReleaseNotes: true
+          name: "BatAxeKernel ${{ github.event.inputs.version }} for OneUI4.X"
+          body: |
+            ## BatAxeKernel ${{ github.event.inputs.version }}
+            
+            ### Build Information
+            - **Version**: ${{ github.event.inputs.version }}
+            - **Build Date**: ${{ env.BUILD_DATE }}
+            - **Commit**: ${{ env.COMMIT_SHA }}
+            - **Toolchain**: Clang ${{ github.event.inputs.llvm }}
+            - **KernelSU**: ${{ github.event.inputs.ksun == 'y' && 'Enabled' || 'Disabled' }}
+            
+            ### Supported Devices
+            ${{ fromJSON(github.event.inputs.devices) }}
+            
+            ### Notes
+            - Flash via custom recovery (TWRP/OrangeFox)
+            - Make sure to backup your current kernel before flashing
+          draft: false
+          prerelease: false
+          generateReleaseNotes: false
           makeLatest: true
-          skipIfReleaseExists: true
+          skipIfReleaseExists: false
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          removeArtifacts: true
+          removeArtifacts: false
           artifacts: "artifacts/**/*.zip"
 
       - name: Cleanup Artifacts
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: S*
+        if: always()
+        run: |
+          echo "Cleaning up downloaded artifacts..."
+          rm -rf artifacts
