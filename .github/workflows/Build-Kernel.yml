@@ -1,4 +1,4 @@
-name: Build (Release)
+name: Build BatAxeKernel(Release)
 run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
 
 on:
@@ -7,15 +7,32 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: 'v'
+        default: ''
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
         default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
-        description: 'Clang (12-20) or Neutron (Latest) Version'
+        description: 'Clang (12-21) or Neutron (Latest) Version'
         required: true
         default: 'latest'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - 'latest'
       tag:
         description: 'Release Tag'
         required: true
@@ -43,7 +60,7 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
+          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq
           
       - name: Set Environment Variable
         run: |
@@ -54,17 +71,100 @@ jobs:
           
       - name: Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
+          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
-  release:
+      - name: Generate Build Summary
+        run: |
+          BUILD_INFO_FILE="build_summary_${{ matrix.device }}.md"
+          cat << EOF > $BUILD_INFO_FILE
+          ### Build Summary for ${{ matrix.device }}
+
+          **Device:** ${{ env.BUILD_DEVICE }} (${{ matrix.device }})
+          **Kernel Version:** ${{ env.BUILD_KERNEL_VERSION }}
+          **Build Date:** ${{ env.BUILD_DATE }}
+          **Commit SHA:** ${{ env.COMMIT_SHA }}
+          **Toolchain:** Clang ${{ github.event.inputs.llvm }}
+          **KernelSU Next:** ${{ github.event.inputs.ksun }}
+
+          **Build Status:** ✅ Success
+
+          ---
+          EOF
+          
+          # Upload build summary as artifact
+          echo "BUILD_INFO_FILE=$BUILD_INFO_FILE" >> $GITHUB_ENV
+
+      - name: Upload Build Summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-summary-${{ matrix.device }}
+          path: build_summary_${{ matrix.device }}.md
+          retention-days: 1
+
+  generate-release-body:
     needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.generate-body.outputs.release_body }}
+    steps:
+      - name: Download Build Summaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-summary-*
+          path: summaries
+
+      - name: Generate Release Body
+        id: generate-body
+        run: |
+          RELEASE_BODY="# BatAxe Kernel ${{ needs.build.outputs.version }} Release\n\n"
+          RELEASE_BODY+="**Build Information:**\n"
+          RELEASE_BODY+="- **Kernel Version:** ${{ needs.build.outputs.version }}\n"
+          RELEASE_BODY+="- **Build Date:** ${{ needs.build.outputs.date }}\n"
+          RELEASE_BODY+="- **Toolchain:** Clang ${{ github.event.inputs.llvm }}\n"
+          RELEASE_BODY+="- **KernelSU Next:** ${{ github.event.inputs.ksun }}\n"
+          RELEASE_BODY+="- **Commit:** ${{ needs.build.outputs.commit_sha }}\n\n"
+          
+          RELEASE_BODY+="## Supported Devices\n\n"
+          
+          # Combine all build summaries
+          for summary_file in summaries/build-summary-*/*.md; do
+            if [ -f "$summary_file" ]; then
+              RELEASE_BODY+="$(cat "$summary_file")\n\n"
+            fi
+          done
+          
+          RELEASE_BODY+="## Changelog\n\n"
+          RELEASE_BODY+="\`\`\`\n"
+          RELEASE_BODY+="## Add your changelog here or fetch from git\n"
+          RELEASE_BODY+="## git log --oneline --since=\"1 month ago\"\n"
+          RELEASE_BODY+="\`\`\`\n\n"
+          
+          RELEASE_BODY+="## Installation\n\n"
+          RELEASE_BODY+="1. Download the appropriate zip file for your device\n"
+          RELEASE_BODY+="2. Flash via custom recovery (TWRP/OrangeFox)\n"
+          RELEASE_BODY+="3. Reboot and enjoy!\n\n"
+          
+          RELEASE_BODY+="## Notes\n\n"
+          RELEASE_BODY+="- Make sure you're on the latest firmware\n"
+          RELEASE_BODY+="- Backup your current kernel before flashing\n"
+          RELEASE_BODY+="- Report any issues on GitHub Issues\n"
+          
+          # Escape newlines for output
+          RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\n'/'%0A'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\r'/'%0D'}"
+          
+          echo "release_body=$RELEASE_BODY" >> $GITHUB_OUTPUT
+
+  release:
+    needs: [build, generate-release-body]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -74,21 +174,37 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: BatAxeKernel-*
+          merge-multiple: true
+
+      - name: Show Artifacts Structure
+        run: |
+          echo "Artifacts directory structure:"
+          find artifacts -type f -name "*.zip" | sort
+          echo "Total kernel files found:"
+          find artifacts -type f -name "*.zip" | wc -l
 
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "${{ github.event.inputs.tag }}"
-          draft: true
-          generateReleaseNotes: true
+          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          body: ${{ needs.generate-release-body.outputs.release_body }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: false
           makeLatest: true
           skipIfReleaseExists: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          removeArtifacts: true
           artifacts: "artifacts/**/*.zip"
+          artifactErrorsFailBuild: true
 
       - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
-          name: S*
+          name: "BatAxeKernel-*"
+
+      - name: Cleanup Build Summaries
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: "build-summary-*"

@@ -72,7 +72,7 @@ Options:
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -107,7 +107,7 @@ while [[ $# -gt 0 ]]; do
         --llvm|-l)
             USE_NEUTRON=true
 
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
+            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
                 USE_NEUTRON=false
             fi
 
@@ -328,10 +328,14 @@ toolchain ()
         elif [[ "$LLVM" == "18" ]]; then
             CLANG=522817 # Clang 18.0.1
         elif [[ "$LLVM" == "19" ]]; then
-            CLANG=536225 # Clang 19.0.1            
-        else
-            LLVM=20
+            CLANG=536225 # Clang 19.0.1
+        elif [[ "$LLVM" == "20" ]]; then
             CLANG=547379 # Clang 20.0.0
+        elif [[ "$LLVM" == "21" ]]; then
+            CLANG=563880 # Clang 21.0.0
+        else
+            LLVM=21
+            CLANG=563880 # Clang 21.0.0
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -344,13 +348,29 @@ toolchain ()
             MINOR=".0.2"
         elif [[ "$LLVM" == "17" ]]; then
             MINOR=".0.4"
-        else
+        elif [[ "$LLVM" == "18" ]] || [[ "$LLVM" == "19" ]]; then
             MINOR=".0.1"
+        elif [[ "$LLVM" == "20" ]] || [[ "$LLVM" == "21" ]]; then
+            MINOR=".0.0"
+        else
+            MINOR=".0.0"
         fi
 
         CLANG_VERSION="r$CLANG"
         CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
         TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
+
+        if [[ "$LLVM" == "12" ]]; then
+            HOST=hub # GitHub
+            ROM="ArrowOS-Devices" # ArrowOS
+        elif [[ "$LLVM" -ge 13 ]] && [[ "$LLVM" -le 20 ]]; then
+            HOST=lab # GitLab
+            ROM=crdroidandroid # crDroid
+        elif [[ "$LLVM" == "21" ]]; then
+            HOST=lab # GitLab
+            ROM="reaPeR1010" # reaPeR1010
+        fi
+
         CLIB=":$CLANG_DIR/lib"
         CARGS="
             CC=clang \
@@ -382,14 +402,6 @@ toolchain ()
             separator
             check "Neutron Clang 18"
         else
-            if [[ "$LLVM" == "12" ]]; then
-                HOST=hub # GitHub
-                ROM="ArrowOS-Devices" # ArrowOS
-            else
-                HOST=lab # GitLab
-                ROM=crdroidandroid # crDroid
-            fi
-
             TOOLCHAIN_URL="https://git$HOST.com/$ROM/android_prebuilts_clang_host_linux-x86_clang-$CLANG_VERSION.git"
 
             quotes "Add $CLANG_INFO as Submodule"
