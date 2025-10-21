@@ -261,98 +261,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  multi-build:
-    runs-on: ubuntu-22.04
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'yes')
-    
-    strategy:
-      matrix:
-        model: [d2s, d2x, d1, d1xks]
-        llvm: [17, 21]
-      fail-fast: false
-      max-parallel: 2
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Setup Build Environment
-      run: |
-        sudo apt update
-        sudo apt install -y \
-          build-essential \
-          libncurses-dev \
-          bison \
-          flex \
-          libssl-dev \
-          libelf-dev \
-          bc \
-          curl \
-          wget \
-          git \
-          python3 \
-          python3-pip \
-          zip \
-          unzip \
-          file
-          
-    - name: Set Multi-Build Variables
-      run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          KERNEL_VERSION="${{ github.event.inputs.version }}"
-          RELEASE_TAG="${{ github.event.inputs.tag }}"
-        else
-          KERNEL_VERSION="${GITHUB_REF#refs/tags/}"
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-        fi
-        
-        echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-        echo "RELEASE=y" >> $GITHUB_ENV
-        echo "MODEL=${{ matrix.model }}" >> $GITHUB_ENV
-        echo "LLVM=${{ matrix.llvm }}" >> $GITHUB_ENV
-        echo "KSU=y" >> $GITHUB_ENV
-        echo "CLEAN=n" >> $GITHUB_ENV
-        
-    - name: Build Kernel
-      run: |
-        chmod +x build.sh
-        set -e
-        ./build.sh \
-          --model "$MODEL" \
-          --llvm "$LLVM" \
-          --ksu "$KSU" \
-          --clean "$CLEAN" \
-          --ver "$KERNEL_VERSION" \
-          --rel y
-        
-    - name: Check Multi-Build Artifacts
-      id: check_multi_artifacts
-      run: |
-        if [ -d "build/export" ] && [ "$(ls -A build/export/*.zip 2>/dev/null)" ]; then
-          echo "artifacts_exist=true" >> $GITHUB_OUTPUT
-          echo "Artifacts found for $MODEL:"
-          ls -la build/export/*.zip
-        else
-          echo "artifacts_exist=false" >> $GITHUB_OUTPUT
-          echo "No artifacts found for $MODEL in build/export/"
-        fi
-        
-    - name: Upload Multi-Build Artifacts
-      if: steps.check_multi_artifacts.outputs.artifacts_exist == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-${{ matrix.model }}-llvm${{ matrix.llvm }}-${{ env.RELEASE_TAG }}
-        path: |
-          build/export/*.zip
-          build.log
-        retention-days: 30
-
   notify:
-    needs: [build, multi-build]
+    needs: [build]
     runs-on: ubuntu-22.04
     if: always()
     
@@ -367,7 +277,6 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Build Results" >> $GITHUB_STEP_SUMMARY
         echo "- **Main Build**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Multi-Build**: ${{ needs.multi-build.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Release Tag**: ${{ env.RELEASE_TAG }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Kernel Version**: ${{ env.KERNEL_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
