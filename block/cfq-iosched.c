@@ -6,6 +6,7 @@
  *
  *  Copyright (C) 2003 Jens Axboe <axboe@kernel.dk>
  */
+ #include <linux/binfmts.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/sched/clock.h>
@@ -1860,6 +1861,9 @@ static int __cfq_set_weight(struct cgroup_subsys_state *css, u64 val,
 
 	if (val < min || val > max)
 		return -ERANGE;
+
+	if (task_is_booster(current))
+	return ret;
 
 	spin_lock_irq(&blkcg->lock);
 	cfqgd = blkcg_to_cfqgd(blkcg);
