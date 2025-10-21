@@ -4,10 +4,21 @@ run-name: 'Release: Build ${{ github.event.inputs.version }} for ${{ github.even
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Kernel Version'
+      devices:
+        description: 'Select devices to build'
         required: true
-        default: ''
+        type: choice
+        options:
+          - all
+          - d1
+          - d1xks
+          - d2s
+          - d2x
+          - beyond0lte
+          - beyond1lte
+          - beyond2lte
+          - beyondx
+        default: 'all'
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
@@ -41,30 +52,19 @@ on:
         options:
           - 'y'
           - 'n'
+      version:
+        description: 'Kernel Version'
+        required: true
+        default: ''
       tag:
         description: 'Release Tag'
         required: true
-        default: 'v'
+        default: ''
       token:
         description: 'Token (Leave Empty to Use GitHub Token)'
         required: false
         default: ''
         type: string
-      devices:
-        description: 'Select devices to build'
-        required: true
-        type: choice
-        options:
-          - all
-          - d1
-          - d1xks
-          - d2s
-          - d2x
-          - beyond0lte
-          - beyond1lte
-          - beyond2lte
-          - beyondx
-        default: 'all'
 
 jobs:
   validate-devices:

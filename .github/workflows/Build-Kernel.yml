@@ -8,6 +8,10 @@ on:
         description: 'Kernel Version'
         required: true
         default: ''
+      tag:
+        description: 'Release Tag'
+        required: true
+        default: ''
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
@@ -33,10 +37,6 @@ on:
           - '20'
           - '21'
           - 'latest'
-      tag:
-        description: 'Release Tag'
-        required: true
-        default: 'v'
       token:
         description: 'Token (Leave Empty to Use GitHub Token)'
         required: false
