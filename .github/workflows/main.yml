@@ -7,19 +7,36 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: 'v'
+        default: ''
+      tag:
+        description: 'Release Tag'
+        required: true
+        default: 'v'  
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
         default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
-        description: 'Clang (12-20) or Neutron (Latest) Version'
+        description: 'Clang (12-21) or Neutron (Latest) Version'
         required: true
         default: 'latest'
-      tag:
-        description: 'Release Tag'
-        required: true
-        default: 'v'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - 'latest'
       token:
         description: 'Token (Leave Empty to Use GitHub Token)'
         required: false
@@ -59,7 +76,7 @@ jobs:
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
@@ -92,7 +109,7 @@ jobs:
           - **Build Date:** $(date +'%Y-%m-%d')
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
           - **KernelSU Next:** ${{ github.event.inputs.ksun }}
-          - **Devices Built:** ${{ github.event.inputs.devices }}
+          - **Devices Built:** ${{ matrix.device }}
 
           ## Supported Devices
           - $(find artifacts -name "*.zip" -exec basename {} \; | sed 's/.zip//' | sort | tr '\n' ',' | sed 's/,/, /g' | sed 's/, $//')
