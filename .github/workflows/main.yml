@@ -75,6 +75,45 @@ jobs:
         with:
           path: artifacts
 
+      - name: Show Artifacts Structure
+        run: |
+          echo "Artifacts directory structure:"
+          find artifacts -type f -name "*.zip" | sort
+          echo "Total kernel files found:"
+          find artifacts -type f -name "*.zip" | wc -l
+
+      - name: Create Simple Release Body
+        id: release-body
+        run: |
+          RELEASE_BODY="# BatAxe Kernel ${{ github.event.inputs.version }} Release
+
+          **Build Information:**
+          - **Kernel Version:** ${{ github.event.inputs.version }}
+          - **Build Date:** $(date +'%Y-%m-%d')
+          - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
+          - **KernelSU Next:** ${{ github.event.inputs.ksun }}
+          - **Devices Built:** ${{ github.event.inputs.devices }}
+
+          ## Supported Devices
+          - $(find artifacts -name "*.zip" -exec basename {} \; | sed 's/.zip//' | sort | tr '\n' ',' | sed 's/,/, /g' | sed 's/, $//')
+
+          ## Installation
+          1. Download the appropriate zip file for your device
+          2. Flash via custom recovery (TWRP/OrangeFox)
+          3. Reboot and enjoy!
+
+          ## Notes
+          - Make sure you're on the latest firmware
+          - Backup your current kernel before flashing
+          - Report any issues on GitHub Issues"
+
+          # Escape for output
+          RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\n'/'%0A'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\r'/'%0D'}"
+          
+          echo "release_body=$RELEASE_BODY" >> $GITHUB_OUTPUT    
+
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
