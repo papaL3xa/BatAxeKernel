@@ -21,9 +21,9 @@ on:
           - 'y'
           - 'n'
       llvm:
-        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
-        default: 'latest'
+        default: '10032024'
         type: choice
         options:
           - '12'
@@ -36,7 +36,7 @@ on:
           - '19'
           - '20'
           - '21'
-          - 'latest'
+          - '10032024'
       token:
         description: 'Token (Leave Empty to Use GitHub Token)'
         required: false
