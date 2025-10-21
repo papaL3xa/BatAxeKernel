@@ -204,7 +204,7 @@ jobs:
       if: steps.check_artifacts.outputs.artifacts_exist == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-${{ env.MODEL }}-${{ env.RELEASE_TAG }}
+        name: ${{ env.KERNEL_NAME }}-${{ env.MODEL }}-${{ env.RELEASE_TAG }}
         path: |
           build/export/*.zip
           build.log
