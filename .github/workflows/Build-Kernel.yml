@@ -1,5 +1,5 @@
 name: Build BatAxeKernel(Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
