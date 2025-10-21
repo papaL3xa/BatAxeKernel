@@ -1,0 +1,259 @@
+name: Build Kernel-baru
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Device Model'
+        required: true
+        default: 'd2s'
+        type: choice
+        options:
+        - beyond0lte
+        - beyond1lte
+        - beyond2lte
+        - beyondx
+        - d1
+        - d1xks
+        - d2s
+        - d2x
+      llvm_version:
+        description: 'LLVM Version'
+        required: false
+        default: '21'
+        type: choice
+        options:
+        - '12'
+        - '13'
+        - '14'
+        - '15'
+        - '16'
+        - '17'
+        - '18'
+        - '19'
+        - '20'
+        - '21'
+        - 'neutron'
+      include_kernelsu:
+        description: 'Include KernelSU'
+        required: false
+        default: 'y'
+        type: choice
+        options:
+        - 'y'
+        - 'n'
+      clean_build:
+        description: 'Clean Build'
+        required: false
+        default: 'n'
+        type: choice
+        options:
+        - 'y'
+        - 'n'
+
+env:
+  KERNEL_NAME: BatAxeKernel
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Build Environment
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          build-essential \
+          libncurses-dev \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          bc \
+          curl \
+          wget \
+          git \
+          python3 \
+          python3-pip \
+          zip \
+          unzip \
+          file
+          
+    - name: Determine Build Parameters
+      id: params
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          MODEL="${{ github.event.inputs.model }}"
+          LLVM="${{ github.event.inputs.llvm_version }}"
+          KSU="${{ github.event.inputs.include_kernelsu }}"
+          CLEAN="${{ github.event.inputs.clean_build }}"
+        else
+          MODEL="d2s"
+          LLVM="21"
+          KSU="y"
+          CLEAN="n"
+        fi
+        
+        # Set version based on tag or commit
+        if [[ -n "${{ github.ref_name }}" && "${{ github.ref_name }}" == refs/tags/* ]]; then
+          KERNEL_VERSION="${GITHUB_REF#refs/tags/}"
+        else
+          KERNEL_VERSION="${GITHUB_SHA:0:8}"
+        fi
+        
+        echo "MODEL=$MODEL" >> $GITHUB_ENV
+        echo "LLVM=$LLVM" >> $GITHUB_ENV
+        echo "KSU=$KSU" >> $GITHUB_ENV
+        echo "CLEAN=$CLEAN" >> $GITHUB_ENV
+        echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
+        echo "RELEASE=y" >> $GITHUB_ENV
+        
+        echo "Build Parameters:"
+        echo "Model: $MODEL"
+        echo "LLVM: $LLVM"
+        echo "KernelSU: $KSU"
+        echo "Clean: $CLEAN"
+        echo "Version: $KERNEL_VERSION"
+        
+    - name: Build Kernel
+      run: |
+        chmod +x build.sh
+        ./build.sh \
+          --model $MODEL \
+          --llvm $LLVM \
+          --ksu $KSU \
+          --clean $CLEAN \
+          --ver $KERNEL_VERSION \
+          --rel y
+      
+    - name: Upload Kernel Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-${{ env.MODEL }}-${{ github.sha }}
+        path: |
+          build/export/*.zip
+          build.log
+        retention-days: 30
+        
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/export/*.zip
+        body: |
+          # ${{ env.KERNEL_NAME }} Kernel Build
+          
+          ## Build Information
+          - **Device**: ${{ env.MODEL }}
+          - **Kernel Version**: ${{ env.KERNEL_VERSION }}
+          - **Commit**: ${{ github.sha }}
+          - **Build Date**: ${{ fromJSON('["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]')[github.event.head_commit.timestamp[5:7]-1] }} ${{ github.event.head_commit.timestamp[8:10] }}, ${{ github.event.head_commit.timestamp[0:4] }}
+          
+          ## Supported Devices
+          - ${{ env.MODEL }}
+          
+          ## Features
+          - Built with LLVM ${{ env.LLVM }}
+          - KernelSU: ${{ env.KSU }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  multi-build:
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    strategy:
+      matrix:
+        model: [d2s, d2x, d1, d1xks]
+        llvm: [17, 21]
+      fail-fast: false
+      max-parallel: 2
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Build Environment
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          build-essential \
+          libncurses-dev \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          bc \
+          curl \
+          wget \
+          git \
+          python3 \
+          python3-pip \
+          zip \
+          unzip \
+          file
+          
+    - name: Set Build Variables
+      run: |
+        KERNEL_VERSION="${GITHUB_REF#refs/tags/}"
+        echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
+        echo "RELEASE=y" >> $GITHUB_ENV
+        echo "MODEL=${{ matrix.model }}" >> $GITHUB_ENV
+        echo "LLVM=${{ matrix.llvm }}" >> $GITHUB_ENV
+        
+    - name: Build Kernel
+      run: |
+        chmod +x build.sh
+        ./build.sh \
+          --model ${{ matrix.model }} \
+          --llvm ${{ matrix.llvm }} \
+          --ksu y \
+          --clean n \
+          --ver $KERNEL_VERSION \
+          --rel y
+          
+    - name: Upload Multi-Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-${{ matrix.model }}-llvm${{ matrix.llvm }}-${{ github.sha }}
+        path: |
+          build/export/*.zip
+          build.log
+        retention-days: 30
+
+  notify:
+    needs: [build, multi-build]
+    runs-on: ubuntu-22.04
+    if: always()
+    
+    steps:
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Send Notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#builds'
+        text: |
+          Build ${{ job.status }} for ${{ github.repository }}
+          Commit: ${{ github.sha }}
+          Workflow: ${{ github.workflow }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
