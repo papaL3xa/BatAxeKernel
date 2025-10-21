@@ -1,5 +1,4 @@
 name: Build BatAxe Kernel
-run-name: 'Build : For ${{ github.event.inputs.model }} V.${{ github.event.inputs.kernel-version }} with CLANG-${{ github.event.inputs.toolchain }}
 
 on:
   workflow_dispatch:
@@ -72,6 +71,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    name: 'Build For ${{ github.event.inputs.model }} V.${{ github.event.inputs.kernel_version }} with CLANG-${{ github.event.inputs.toolchain }}'
     
     steps:
     - name: Checkout repository
@@ -92,42 +92,49 @@ jobs:
     - name: Build kernel
       run: |
         ./build.sh \
-          --model "${{ inputs.model }}" \
-          --ksu "${{ inputs.ksu }}" \
-          --version "${{ inputs.kernel_version }}" \
-          --release "${{ inputs.release }}" \
-          --clean "${{ inputs.clean }}" \
-          --llvm "${{ inputs.toolchain }}"
+          --model "${{ github.event.inputs.model }}" \
+          --ksu "${{ github.event.inputs.ksu }}" \
+          --version "${{ github.event.inputs.kernel_version }}" \
+          --release "${{ github.event.inputs.release }}" \
+          --clean "${{ github.event.inputs.clean }}" \
+          --llvm "${{ github.event.inputs.toolchain }}"
+
+    - name: Get build info from environment
+      id: build-info
+      run: |
+        echo "BUILD_DEVICE=${BUILD_DEVICE}" >> $GITHUB_OUTPUT
+        echo "SOC=${SOC}" >> $GITHUB_OUTPUT
+        echo "KERNEL_FILE=${KERNEL_FILE}" >> $GITHUB_OUTPUT
+        echo "KERNEL_PATH=${KERNEL_PATH}" >> $GITHUB_OUTPUT
 
     - name: Upload kernel artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.KERNEL_NAME }}-${{ inputs.model }}-${{ github.run_id }}
+        name: ${{ env.KERNEL_NAME }}-${{ github.event.inputs.model }}-${{ github.run_id }}
         path: build/export/
         retention-days: 30
 
     - name: Create GitHub Release
-      if: inputs.release == 'y'
+      if: github.event.inputs.release == 'y'
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: build/export/*.zip
-        tag_name: ${{ inputs.kernel_version }}-${{ inputs.model }}
-        name: ${{ env.KERNEL_NAME }} ${{ inputs.kernel_version }} for ${{ inputs.model }}
+        tag_name: ${{ github.event.inputs.kernel_version }}-${{ github.event.inputs.model }}
+        name: ${{ env.KERNEL_NAME }} ${{ github.event.inputs.kernel_version }} for ${{ github.event.inputs.model }}
         body: |
-          ${{ env.KERNEL_NAME }} ${{ inputs.kernel_version }} for ${{ env.BUILD_DEVICE }} (${{ inputs.model }})
+          ${{ env.KERNEL_NAME }} ${{ github.event.inputs.kernel_version }} for ${{ steps.build-info.outputs.BUILD_DEVICE }} (${{ github.event.inputs.model }})
           
           **Build Information:**
-          - Device: ${{ env.BUILD_DEVICE }} (${{ inputs.model }})
-          - SOC: Exynos 982${{ env.SOC }}
-          - Kernel Version: ${{ inputs.kernel_version }}
-          - Toolchain: ${{ env.CLANG_INFO }}
+          - Device: ${{ steps.build-info.outputs.BUILD_DEVICE }} (${{ github.event.inputs.model }})
+          - SOC: Exynos 982${{ steps.build-info.outputs.SOC }}
+          - Kernel Version: ${{ github.event.inputs.kernel_version }}
           - Build Date: ${{ date() }}
           
           **Features:**
-          - KernelSU Next: ${{ inputs.ksu == 'y' && 'Included' || 'Not Included' }}
-          - Clean Build: ${{ inputs.clean == 'y' && 'Yes' || 'No' }}
+          - KernelSU Next: ${{ github.event.inputs.ksu == 'y' && 'Included' || 'Not Included' }}
+          - Clean Build: ${{ github.event.inputs.clean == 'y' && 'Yes' || 'No' }}
         draft: false
         prerelease: false
 
@@ -135,8 +142,8 @@ jobs:
       if: success()
       run: |
         echo "✅ Kernel build completed successfully!"
-        echo "📦 Artifact: ${{ env.KERNEL_FILE }}"
-        echo "📁 Path: ${{ env.KERNEL_PATH }}"
+        echo "📦 Artifact: ${{ steps.build-info.outputs.KERNEL_FILE }}"
+        echo "📁 Path: ${{ steps.build-info.outputs.KERNEL_PATH }}"
 
     - name: Notify build failure
       if: failure()
