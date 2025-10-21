@@ -1,5 +1,5 @@
 name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
+run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ on:
           - 'y'
           - 'n'
       llvm:
-        description: 'Clang (12-21) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (Latest) Version'
         required: true
         default: 'latest'
         type: choice
