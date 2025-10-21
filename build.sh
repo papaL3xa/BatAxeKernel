@@ -105,26 +105,35 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --llvm|-l)
-            USE_NEUTRON=true
-
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
-                USE_NEUTRON=false
-            fi
-
             if [[ -n "$2" && "$2" != -* ]]; then
-                NEUTRON="$2"
+                # Cek apakah input adalah angka antara 12-21
+                if [[ "$2" =~ ^[0-9]+$ ]] && [[ "$2" -ge 12 ]] && [[ "$2" -le 21 ]]; then
+                    LLVM="$2"
+                    USE_NEUTRON=false
+                else
+                    # Jika bukan angka 12-21, anggap sebagai versi Neutron
+                    NEUTRON="$2"
+                    USE_NEUTRON=true
+                fi
                 shift 2
             else
+                # Default ke Neutron
                 NEUTRON=10032024
+                USE_NEUTRON=true
                 shift
             fi
             ;;
-        *)\
+        *)
             usage
             exit 1
             ;;
     esac
 done
+
+# Set default value untuk LLVM jika tidak di-set
+if [ -z "$LLVM" ] && [ "$USE_NEUTRON" = "false" ]; then
+    LLVM=21
+fi
 
 if [ -z $MODEL ]; then
     MODEL=d2s
@@ -658,4 +667,4 @@ rm -rf ./build.log
 
     quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
     separator
-) 2>&1	| tee -a ./build.log
+) 2>&1 | tee -a ./build.log
