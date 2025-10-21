@@ -1,290 +1,145 @@
-name: Build Kernel
+name: Build BatAxe Kernel
+run-name: 'Build : For ${{ github.event.inputs.model }} V.${{ github.event.inputs.kernel-version }} with CLANG-${{ github.event.inputs.toolchain }}
 
 on:
-  push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       model:
-        description: 'Device Model'
+        description: 'Device Model Code'
         required: true
         default: 'd2s'
         type: choice
         options:
-        - beyond0lte
-        - beyond1lte
-        - beyond2lte
-        - beyondx
-        - d1
-        - d1xks
-        - d2s
-        - d2x
-      llvm_version:
-        description: 'LLVM Version'
-        required: false
-        default: '21'
-        type: choice
-        options:
-        - '12'
-        - '13'
-        - '14'
-        - '15'
-        - '16'
-        - '17'
-        - '18'
-        - '19'
-        - '20'
-        - '21'
-        - 'neutron'
-      include_kernelsu:
-        description: 'Include KernelSU'
-        required: false
+          - beyond0lte
+          - beyond1lte
+          - beyond2lte
+          - beyondx
+          - d1
+          - d1xks
+          - d2s
+          - d2x
+      ksu:
+        description: 'Include KernelSU Next with SuSFS'
+        required: true
         default: 'y'
         type: choice
         options:
-        - 'y'
-        - 'n'
-      clean_build:
-        description: 'Clean Build'
-        required: false
+          - y
+          - n
+      kernel_version:
+        description: 'Kernel Version'
+        required: true
+        default: 'Unofficial'
+        type: string
+      release:
+        description: 'Release Type (y: Release, n: CI)'
+        required: true
         default: 'n'
         type: choice
         options:
-        - 'y'
-        - 'n'
-      version:
-        description: 'Kernel Version (e.g., 1.0.0, 2.1.5)'
+          - y
+          - n
+      clean:
+        description: 'Clean Build'
         required: true
-        default: '1.0.0'
-        type: string
-      tag:
-        description: 'Release Tag (e.g., v1.0.0, stable, beta)'
-        required: true
-        default: 'v1.0.0'
-        type: string
-      create_release:
-        description: 'Create GitHub Release'
-        required: false
-        default: 'yes'
+        default: 'n'
         type: choice
         options:
-        - 'yes'
-        - 'no'
+          - y
+          - n
+      toolchain:
+        description: 'Toolchain Version'
+        required: true
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
+          - 'latest'
 
 env:
-  KERNEL_NAME: BatAxeKernel
+  KERNEL_NAME: "BatAxeKernel"
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout Repository
+    - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Setup Build Environment
+
+    - name: Setup build environment
       run: |
         sudo apt update
-        sudo apt install -y \
-          build-essential \
-          libncurses-dev \
-          bison \
-          flex \
-          libssl-dev \
-          libelf-dev \
-          bc \
-          curl \
-          wget \
-          git \
-          python3 \
-          python3-pip \
-          zip \
-          unzip \
-          file
-          
-    - name: Determine Build Parameters
-      id: params
+        sudo apt install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev \
+                         git curl wget python3 python3-pip file zip unzip
+
+    - name: Make build.sh executable
+      run: chmod +x build.sh
+
+    - name: Build kernel
       run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          MODEL="${{ github.event.inputs.model }}"
-          LLVM="${{ github.event.inputs.llvm_version }}"
-          KSU="${{ github.event.inputs.include_kernelsu }}"
-          CLEAN="${{ github.event.inputs.clean_build }}"
-          KERNEL_VERSION="${{ github.event.inputs.version }}"
-          RELEASE_TAG="${{ github.event.inputs.tag }}"
-          CREATE_RELEASE="${{ github.event.inputs.create_release }}"
-        else
-          # Auto-detect for push events
-          MODEL="d2s"
-          LLVM="21"
-          KSU="y"
-          CLEAN="n"
-          
-          # For tag pushes, use the tag name
-          if [[ -n "${{ github.ref_name }}" && "${{ github.ref_name }}" == refs/tags/* ]]; then
-            KERNEL_VERSION="${GITHUB_REF#refs/tags/}"
-            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-          else
-            # For branch pushes, use commit hash
-            KERNEL_VERSION="CI-${GITHUB_SHA:0:8}"
-            RELEASE_TAG="ci-${GITHUB_SHA:0:8}"
-          fi
-          CREATE_RELEASE="yes"
-        fi
-        
-        # Validate version format
-        if [[ ! "$KERNEL_VERSION" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]] && [[ ! "$KERNEL_VERSION" =~ ^CI-[a-f0-9]+$ ]]; then
-          echo "Warning: Version '$KERNEL_VERSION' doesn't follow standard version format"
-        fi
-        
-        # Validate tag format
-        if [[ ! "$RELEASE_TAG" =~ ^[vV]?[a-zA-Z0-9\.\_\-]+$ ]]; then
-          echo "Error: Invalid tag format '$RELEASE_TAG'"
-          exit 1
-        fi
-        
-        # Ensure tag starts with 'v' if it's a version
-        if [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-          RELEASE_TAG="v$RELEASE_TAG"
-        fi
-        
-        echo "MODEL=$MODEL" >> $GITHUB_ENV
-        echo "LLVM=$LLVM" >> $GITHUB_ENV
-        echo "KSU=$KSU" >> $GITHUB_ENV
-        echo "CLEAN=$CLEAN" >> $GITHUB_ENV
-        echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-        echo "CREATE_RELEASE=$CREATE_RELEASE" >> $GITHUB_ENV
-        echo "RELEASE=y" >> $GITHUB_ENV
-        
-        echo "Build Parameters:"
-        echo "Model: $MODEL"
-        echo "LLVM: $LLVM"
-        echo "KernelSU: $KSU"
-        echo "Clean: $CLEAN"
-        echo "Kernel Version: $KERNEL_VERSION"
-        echo "Release Tag: $RELEASE_TAG"
-        echo "Create Release: $CREATE_RELEASE"
-        
-    - name: Build Kernel
-      run: |
-        chmod +x build.sh
-        set -e
         ./build.sh \
-          --model "$MODEL" \
-          --llvm "$LLVM" \
-          --ksu "$KSU" \
-          --clean "$CLEAN" \
-          --ver "$KERNEL_VERSION" \
-          --rel y
-      
-    - name: Check if Artifacts Exist
-      id: check_artifacts
-      run: |
-        if [ -d "build/export" ] && [ "$(ls -A build/export/*.zip 2>/dev/null)" ]; then
-          echo "artifacts_exist=true" >> $GITHUB_OUTPUT
-          echo "artifacts_count=$(ls -1 build/export/*.zip 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
-          echo "Artifacts found:"
-          ls -la build/export/*.zip
-        else
-          echo "artifacts_exist=false" >> $GITHUB_OUTPUT
-          echo "artifacts_count=0" >> $GITHUB_OUTPUT
-          echo "No artifacts found in build/export/"
-          ls -la build/ || true
-          ls -la build/export/ || true
-        fi
-        
-    - name: Upload Kernel Artifacts
-      if: steps.check_artifacts.outputs.artifacts_exist == 'true'
+          --model "${{ inputs.model }}" \
+          --ksu "${{ inputs.ksu }}" \
+          --version "${{ inputs.kernel_version }}" \
+          --release "${{ inputs.release }}" \
+          --clean "${{ inputs.clean }}" \
+          --llvm "${{ inputs.toolchain }}"
+
+    - name: Upload kernel artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.KERNEL_NAME }}-${{ env.MODEL }}-${{ env.RELEASE_TAG }}
-        path: |
-          build/export/*.zip
-          build.log
+        name: ${{ env.KERNEL_NAME }}-${{ inputs.model }}-${{ github.run_id }}
+        path: build/export/
         retention-days: 30
-        
-    - name: Create Git Tag
-      if: env.CREATE_RELEASE == 'yes' && steps.check_artifacts.outputs.artifacts_exist == 'true'
-      run: |
-        # Check if tag already exists
-        if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
-          echo "Tag $RELEASE_TAG already exists, skipping..."
-        else
-          echo "Creating new tag: $RELEASE_TAG"
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG - $KERNEL_VERSION"
-          git push origin "$RELEASE_TAG"
-        fi
-        
+
     - name: Create GitHub Release
-      if: env.CREATE_RELEASE == 'yes' && steps.check_artifacts.outputs.artifacts_exist == 'true'
+      if: inputs.release == 'y'
       uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ env.RELEASE_TAG }}
-        name: ${{ env.KERNEL_NAME }} ${{ env.RELEASE_TAG }}
-        files: build/export/*.zip
-        body: |
-          # ${{ env.KERNEL_NAME }} ${{ env.RELEASE_TAG }}
-          
-          ## Build Information
-          - **Device**: ${{ env.MODEL }}
-          - **Kernel Version**: ${{ env.KERNEL_VERSION }}
-          - **Release Tag**: ${{ env.RELEASE_TAG }}
-          - **Commit**: ${{ github.sha }}
-          - **Build Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          
-          ## Build Configuration
-          - **LLVM Version**: ${{ env.LLVM }}
-          - **KernelSU**: ${{ env.KSU }}
-          - **Clean Build**: ${{ env.CLEAN }}
-          
-          ## Supported Devices
-          - ${{ env.MODEL }}
-          
-          ## Installation
-          1. Download the kernel zip file
-          2. Flash via custom recovery (TWRP/OrangeFox)
-          3. Reboot and enjoy!
-          
-          ## Changelog
-          Please refer to the commit history for detailed changes.
-        draft: false
-        prerelease: ${{ contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'rc') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: build/export/*.zip
+        tag_name: ${{ inputs.kernel_version }}-${{ inputs.model }}
+        name: ${{ env.KERNEL_NAME }} ${{ inputs.kernel_version }} for ${{ inputs.model }}
+        body: |
+          ${{ env.KERNEL_NAME }} ${{ inputs.kernel_version }} for ${{ env.BUILD_DEVICE }} (${{ inputs.model }})
+          
+          **Build Information:**
+          - Device: ${{ env.BUILD_DEVICE }} (${{ inputs.model }})
+          - SOC: Exynos 982${{ env.SOC }}
+          - Kernel Version: ${{ inputs.kernel_version }}
+          - Toolchain: ${{ env.CLANG_INFO }}
+          - Build Date: ${{ date() }}
+          
+          **Features:**
+          - KernelSU Next: ${{ inputs.ksu == 'y' && 'Included' || 'Not Included' }}
+          - Clean Build: ${{ inputs.clean == 'y' && 'Yes' || 'No' }}
+        draft: false
+        prerelease: false
 
-  notify:
-    needs: [build]
-    runs-on: ubuntu-22.04
-    if: always()
-    
-    steps:
-    - name: Download All Artifacts
-      uses: actions/download-artifact@v4
-      continue-on-error: true
-      
-    - name: Summary Notification
+    - name: Notify build success
+      if: success()
       run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Build Results" >> $GITHUB_STEP_SUMMARY
-        echo "- **Main Build**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Release Tag**: ${{ env.RELEASE_TAG }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Kernel Version**: ${{ env.KERNEL_VERSION }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [[ "${{ needs.build.result }}" == "success" && "${{ needs.multi-build.result }}" == "success" ]]; then
-          echo "✅ **All builds completed successfully!**" >> $GITHUB_STEP_SUMMARY
-          echo "📦 **Artifacts are available in the release**" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ **Some builds failed!**" >> $GITHUB_STEP_SUMMARY
-          echo "🔍 **Check the logs for details**" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "✅ Kernel build completed successfully!"
+        echo "📦 Artifact: ${{ env.KERNEL_FILE }}"
+        echo "📁 Path: ${{ env.KERNEL_PATH }}"
+
+    - name: Notify build failure
+      if: failure()
+      run: |
+        echo "❌ Kernel build failed!"
+        exit 1

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 separator ()
 {
   echo "---------------------------------------------------------"
@@ -55,14 +57,6 @@ check ()
     fi
 }
 
-submodule () {
-    separator
-    quotes "Fetch all Submodules Update"
-
-    git submodule update -f -q --init --recursive > /dev/null
-    check "Submodules"
-}
-
 usage ()
 {
     cat << EOF
@@ -70,14 +64,15 @@ Usage: $(basename "$0") [options]
 Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -h, --help             List all Build Script Command
+    -v, --version [value]  Kernel Version (default: Unofficial)
+    -r, --release [y/N]    Release Type (y: Release - n: CI) (default: n)
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
     -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
+    -h, --help             List all Build Script Command
 EOF
 }
 
-USE_NEUTRON=false
-
+# Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --model|-m)
@@ -85,20 +80,16 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --ksu|-k)
-            KSU_OPTION="$2"
+            KSU="$2"
             shift 2
             ;;
-        --ver|-v)
+        --version|-v)
             KERNEL_VERSION="$2"
             shift 2
             ;;
-        --rel|-r)
-            RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
+        --release|-r)
+            RELEASE="$2"
             shift 2
-            ;;
-        --help|-h)
-            usage
-            exit 1
             ;;
         --clean|-c)
             CLEAN="$2"
@@ -106,77 +97,115 @@ while [[ $# -gt 0 ]]; do
             ;;
         --llvm|-l)
             if [[ -n "$2" && "$2" != -* ]]; then
-                # Cek apakah input adalah angka antara 12-21
                 if [[ "$2" =~ ^[0-9]+$ ]] && [[ "$2" -ge 12 ]] && [[ "$2" -le 21 ]]; then
                     LLVM="$2"
                     USE_NEUTRON=false
                 else
-                    # Jika bukan angka 12-21, anggap sebagai versi Neutron
                     NEUTRON="$2"
                     USE_NEUTRON=true
                 fi
                 shift 2
             else
-                # Default ke Neutron
                 NEUTRON=10032024
                 USE_NEUTRON=true
                 shift
             fi
             ;;
+        --help|-h)
+            usage
+            exit 1
+            ;;
         *)
+            echo "Unknown option: $1"
             usage
             exit 1
             ;;
     esac
 done
 
-# Set default value untuk LLVM jika tidak di-set
-if [ -z "$LLVM" ] && [ "$USE_NEUTRON" = "false" ]; then
-    LLVM=21
-fi
-
-if [ -z $MODEL ]; then
+# Set default values
+if [ -z "$MODEL" ]; then
     MODEL=d2s
 fi
 
+if [ -z "$KSU" ]; then
+    KSU=y
+fi
+
+if [ -z "$KERNEL_VERSION" ]; then
+    KERNEL_VERSION=Unofficial
+fi
+
+if [ -z "$RELEASE" ]; then
+    RELEASE=n
+fi
+
+if [ -z "$CLEAN" ]; then
+    CLEAN=n
+fi
+
+if [ -z "$USE_NEUTRON" ]; then
+    USE_NEUTRON=false
+    LLVM=21
+fi
+
+# Set device-specific variables
 KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
     BOARD=SRPRI28A014KU
+    DEVICE=S10
 ;;
 beyond1lte)
     SOC=0
     BOARD=SRPRI28B014KU
+    DEVICE=S10
 ;;
 beyond2lte)
     SOC=0
     BOARD=SRPRI17C014KU
+    DEVICE=S10
 ;;
 beyondx)
     SOC=0
     BOARD=SRPSC04B011KU
+    DEVICE=S10
 ;;
 d1)
     SOC=5
     BOARD=SRPSD26B007KU
+    DEVICE=Note10
 ;;
 d1xks)
     SOC=5
     BOARD=SRPSD23A002KU
+    DEVICE=Note10
 ;;
 d2s)
     SOC=5
     BOARD=SRPSC14B007KU
+    DEVICE=Note10
 ;;
 d2x)
     SOC=5
     BOARD=SRPSC14C007KU
+    DEVICE=Note10
 ;;
 *)
+    echo "Unknown model: $MODEL"
     usage
-    exit
+    exit 1
 esac
+
+# Export variables for GitHub Actions
+if [ ! -z "$GITHUB_ENV" ]; then
+    echo "BUILD_DEVICE=$DEVICE" >> $GITHUB_ENV
+    echo "SOC=$SOC" >> $GITHUB_ENV
+    echo "BOARD=$BOARD" >> $GITHUB_ENV
+    echo "KERNEL_DEFCONFIG=$KERNEL_DEFCONFIG" >> $GITHUB_ENV
+    echo "MODEL=$MODEL" >> $GITHUB_ENV
+fi
 
 detect_env ()
 {
@@ -190,30 +219,13 @@ detect_env ()
     export KBUILD_BUILD_USER=papaL3xa
     export KBUILD_BUILD_HOST=BatAxeKernel
 
-    if [[ "$SOC" == "5" ]]; then
-        DEVICE=Note10
-    else
-        DEVICE=S10
-    fi
-
-    if [ ! -z $RELEASE ]; then
-        quotes "Running on GitHub Actions"
-        echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+    if [ ! -z "$RELEASE" ] && [ "$RELEASE" = "y" ]; then
+        quotes "Running on GitHub Actions - Release Mode"
+    elif [ ! -z "$GITHUB_ACTIONS" ]; then
+        quotes "Running on GitHub Actions - CI Mode"
     else
         quotes "Running on Local Machine"
         LOCAL=y
-    fi
-
-    if [ -z $KERNEL_VERSION ]; then
-        KERNEL_VERSION=Unofficial
-    fi
-
-    if [ -z $KSU ]; then
-        KSU=y
-    fi
-
-    if [ -z $CLEAN ]; then
-        CLEAN=n
     fi
 
     separator
@@ -226,27 +238,27 @@ detect_env ()
         check "Android Image Kitchen Directory"
     fi
 
-    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/ramdisk/init"; then
         quotes "Ramdisk Binary Found!"
     else
         if ! test -d "build/AIK/ramdisk"; then
             mkdir -p build/AIK/ramdisk
         fi
         
-        if ! test -f "build/AIK/dpolicy"; then
+        if ! test -f "build/AIK/ramdisk/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
 
-        if ! test -f "build/AIK/init"; then
+        if ! test -f "build/AIK/ramdisk/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/init
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
+    if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
         rm -rf build/AIK/ramdisk/f*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
@@ -257,23 +269,23 @@ detect_env ()
         quotes "DTB Build Script Found!"
     else
         quotes "Getting DTB Build Script"
-        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mk*
+        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
         check "DTB Build Script"
     fi
 
-    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
+    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
         quotes "DTB Config Directory Found!"
     else
         if ! test -d "build/dtconfigs"; then
             mkdir -p build/dtconfigs
         fi
 
-        if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
+        if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
             quotes "Getting DTB Config for Exynos 982$SOC"
             curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
         fi
 
-        if ! test -f "build/dtconfig/$MODEL.cfg"; then
+        if ! test -f "build/dtconfigs/$MODEL.cfg"; then
             quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
             if [[ "$MODEL" == "d1xks" ]]; then
@@ -297,7 +309,7 @@ detect_env ()
     fi
 
     quotes "Getting Module Props"
-    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.p* build
+    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.prop build/
     check "Module Props"
 
     if ! test -f "build/update-binary"; then
@@ -307,7 +319,7 @@ detect_env ()
     fi
 
     quotes "Getting Kernel Zip Script"
-    curl -LOSs "${BUILD_URL}updater-script" && mv up* build
+    curl -LOSs "${BUILD_URL}updater-script" && mv updater-script build/
     check "Kernel Zip Script"
 
     check "Build Environment"
@@ -317,7 +329,6 @@ toolchain ()
 {
     separator
     if [[ "$USE_NEUTRON" == "true" ]]; then
-        NEUTRON_DATE="=$NEUTRON"
         KERNELCLANG=NeutronClang-$NEUTRON
         CLANG_INFO="Neutron Clang ($NEUTRON)"
         TOOLCHAIN_PATH="toolchain/neutron-$NEUTRON"
@@ -346,27 +357,9 @@ toolchain ()
         fi
 
         KERNELCLANG=Clang$LLVM
-
-        if [[ "$LLVM" == "12" ]]; then
-            MINOR=".0.5"
-        elif [[ "$LLVM" == "13" ]] || [[ "$LLVM" == "14" ]] || [[ "$LLVM" == "15" ]]; then
-            MINOR=".0.3"
-        elif [[ "$LLVM" == "16" ]]; then
-            MINOR=".0.2"
-        elif [[ "$LLVM" == "17" ]]; then
-            MINOR=".0.4"
-        else
-            MINOR=".0.1"
-        fi
-
         CLANG_VERSION="r$CLANG"
-        CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
+        CLANG_INFO="Clang $LLVM (Based on $CLANG_VERSION)"
         TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
-        CLIB=":$CLANG_DIR/lib"
-        CARGS="
-            CC=clang \
-            READELF=$CLANG_DIR/bin/llvm-readelf \
-        "
     fi
 
     if test -d "$TOOLCHAIN_PATH"; then
@@ -378,20 +371,20 @@ toolchain ()
             quotes "Add $CLANG_INFO"
             separator
             cd $TOOLCHAIN_PATH
-            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
-            if ! test -f "/usr/bin/file"; then
+            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S=$NEUTRON
+            if ! command -v file &> /dev/null; then
                 separator
                 quotes "Installing File Package"
                 separator
                 sudo apt install -y file
             fi
             separator
-            quotes "Paching glibc"
+            quotes "Patching glibc"
             separator
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
             cd $OLDPWD
             separator
-            check "Neutron Clang 18"
+            check "Neutron Clang"
         else
             if [[ "$LLVM" == "12" ]]; then
                 HOST=hub # GitHub
@@ -414,16 +407,25 @@ toolchain ()
 
     ORIG_PATH=$PATH
     CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
-    PATH="$CLANG_DIR/bin$CLIB:$ORIG_PATH"
+    PATH="$CLANG_DIR/bin:$ORIG_PATH"
 
-    ARGS="
-        ARCH=arm64 O=out \
-        LLVM=1 LLVM_IAS=1 \
-        $CARGS
-    "
+    if [[ "$USE_NEUTRON" == "true" ]]; then
+        ARGS="
+            ARCH=arm64 O=out \
+            LLVM=1 LLVM_IAS=1 \
+        "
+    else
+        ARGS="
+            ARCH=arm64 O=out \
+            LLVM=1 LLVM_IAS=1 \
+            CC=clang \
+            READELF=$CLANG_DIR/bin/llvm-readelf \
+        "
+    fi
 }
 
-submodule () {
+submodule_update ()
+{
     separator
     quotes "Fetch all Submodules Update"
 
@@ -434,21 +436,6 @@ submodule () {
 kernelsu ()
 {
     separator
-
-    # Nonaktifkan patch KernelSU (dikomentari)
-    # if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-    #     quotes "Patching KernelSU to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
-    #     separator
-    #     check "KernelSU"
-    # fi
-
-    #if ! test -f "arch/arm64/configs/ksu.config"; then
-    #    quotes "Getting KernelSU Next Defconfig"
-    #    curl -LSs "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
-    #    check "KernelSU Next Defconfig"
-    #fi
 
     if ! test -d "drivers/kernelsu"; then
         quotes "Add KernelSU Next as Submodule"
@@ -466,15 +453,7 @@ kernelsu ()
         check "KernelSU Next"
     fi
 
-    # Nonaktifkan patch SuSFS (dikomentari)
-    # if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-    #     separator
-    #     quotes "Patching SuSFS to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
-    #     separator
-    #     check "SuSFS"
-    # fi
+    KSU_NEXT=ksu.config
 }
 
 kernel ()
@@ -489,16 +468,22 @@ kernel ()
     noquotes "Kernel Version: $KERNEL_VERSION"
     noquotes "Build Date: `date +"%Y-%m-%d"`"
 
-    if [ -z $KSU_NEXT ]; then
-        noquotes "KernelSU Next with SuSFS: Not Include"
+    if [[ "$KSU" == "y" ]]; then
+        noquotes "KernelSU Next with SuSFS: Include"
     else
-        noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
+        noquotes "KernelSU Next with SuSFS: Not Include"
     fi
+
+    noquotes "Toolchain: $CLANG_INFO"
 
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
+    if [[ "$KSU" == "y" ]]; then
+        DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
+    else
+        DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config"
+    fi
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
@@ -631,23 +616,21 @@ build_zip ()
 }
 
 # Main Function
-rm -rf ./build.log
-(
+main ()
+{
     START=`date +%s`
 
     separator
-    quotes "Preparing Build Environment"
+    quotes "Starting BatAxe Kernel Build Process"
 
     detect_env
     toolchain
-    pushd $(dirname "$0") > /dev/null
-
+    
     if [[ "$LOCAL" == "y" ]]; then
-        submodule
+        submodule_update
     fi
 
     if [[ "$KSU" == "y" ]]; then
-        KSU_NEXT=ksu.config
         kernelsu
     fi
 
@@ -662,9 +645,21 @@ rm -rf ./build.log
     fi
 
     END=`date +%s`
-
     let "ELAPSED=$END-$START"
 
     quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
     separator
-) 2>&1 | tee -a ./build.log
+    
+    # Output build result for GitHub Actions
+    if [ ! -z "$GITHUB_ACTIONS" ]; then
+        echo "BUILD_STATUS=success" >> $GITHUB_ENV
+        FINAL_FILE=$(ls build/export/*.zip 2>/dev/null | head -1)
+        if [ ! -z "$FINAL_FILE" ]; then
+            echo "KERNEL_FILE=$(basename $FINAL_FILE)" >> $GITHUB_ENV
+            echo "KERNEL_PATH=$FINAL_FILE" >> $GITHUB_ENV
+        fi
+    fi
+}
+
+# Run main function
+main "$@"
