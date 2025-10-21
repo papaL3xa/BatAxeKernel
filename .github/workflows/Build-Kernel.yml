@@ -1,142 +1,94 @@
-name: Build BatAxe Kernel
+name: Build (Release)
+run-name: 'Release: Build ${{ github.event.inputs.version }} with ${{ github.event.inputs.clang }}'
 
 on:
   workflow_dispatch:
     inputs:
-      model:
-        description: 'Device Model Code'
-        required: true
-        default: 'd2s'
-        type: choice
-        options:
-          - beyond0lte
-          - beyond1lte
-          - beyond2lte
-          - beyondx
-          - d1
-          - d1xks
-          - d2s
-          - d2x
-      ksu:
-        description: 'Include KernelSU Next with SuSFS'
-        required: true
-        default: 'y'
-        type: choice
-        options:
-          - y
-          - n
-      kernel_version:
+      version:
         description: 'Kernel Version'
         required: true
-        default: 'Unofficial'
+        default: 'v'
+      ksun:
+        description: 'Install KernelSU-Next ?'
+        required: true
+        default: 'y'
+      llvm:
+        description: 'Clang (12-20) or Neutron (Latest) Version'
+        required: true
+        default: 'latest'
+      tag:
+        description: 'Release Tag'
+        required: true
+        default: 'v'
+      token:
+        description: 'Token (Leave Empty to Use GitHub Token)'
+        required: false
+        default: ''
         type: string
-      release:
-        description: 'Release Type (y: Release, n: CI)'
-        required: true
-        default: 'n'
-        type: choice
-        options:
-          - y
-          - n
-      clean:
-        description: 'Clean Build'
-        required: true
-        default: 'n'
-        type: choice
-        options:
-          - y
-          - n
-      toolchain:
-        description: 'Toolchain Version'
-        required: true
-        default: '18'
-        type: choice
-        options:
-          - '12'
-          - '13'
-          - '14'
-          - '15'
-          - '16'
-          - '17'
-          - '18'
-          - '19'
-          - '20'
-          - '21'
-          - '10032024'
-          - 'latest'
-
-env:
-  KERNEL_NAME: "BatAxeKernel"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout Tree
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-    - name: Setup build environment
-      run: |
-        sudo apt update
-        sudo apt install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev \
-                         git curl wget python3 python3-pip file zip unzip
+      - name: Setup Build Environment
+        run: |
+          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
+          
+      - name: Set Environment Variable
+        run: |
+          SHA=$(git rev-parse --short ${{ github.sha }})
+          echo BUILD_DATE=$(date +'%Y%m%d') >> $GITHUB_ENV
+          echo COMMIT_SHA=$SHA >> $GITHUB_ENV
+          echo BUILD_KERNEL_VERSION=${{ github.event.inputs.version }} >> $GITHUB_ENV
+          
+      - name: Building Kernel
+        run: |
+            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
 
-    - name: Make build.sh executable
-      run: chmod +x build.sh
+      - name: Upload Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          path: "build/export/*.zip"
+          if-no-files-found: error
 
-    - name: Build kernel
-      run: |
-        ./build.sh \
-          --model "${{ github.event.inputs.model }}" \
-          --ksu "${{ github.event.inputs.ksu }}" \
-          --version "${{ github.event.inputs.kernel_version }}" \
-          --release "${{ github.event.inputs.release }}" \
-          --clean "${{ github.event.inputs.clean }}" \
-          --llvm "${{ github.event.inputs.toolchain }}"
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
-    - name: Upload kernel artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.KERNEL_NAME }}-${{ github.event.inputs.model }}-${{ github.run_id }}
-        path: build/export/
-        retention-days: 30
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-    - name: Create GitHub Release
-      if: github.event.inputs.release == 'y'
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        files: build/export/*.zip
-        tag_name: ${{ github.event.inputs.kernel_version }}-${{ github.event.inputs.model }}
-        name: ${{ env.KERNEL_NAME }} ${{ github.event.inputs.kernel_version }} for ${{ github.event.inputs.model }}
-        body: |
-          ${{ env.KERNEL_NAME }} ${{ github.event.inputs.kernel_version }} for ${{ github.event.inputs.model }}
+      - name: Release Build Kernel
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.event.inputs.tag }}
+          name: "${{ github.event.inputs.tag }}"
+          draft: true
+          generateReleaseNotes: true
+          makeLatest: true
+          skipIfReleaseExists: true
+          token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
+          removeArtifacts: true
+          artifacts: "artifacts/**/*.zip"
 
-          **Build Information:**
-          - Device: ${{ github.event.inputs.model }}
-          - Kernel Version: ${{ github.event.inputs.kernel_version }}
-          - Build Date: ${{ fromJSON('{}') }}
-
-          **Features:**
-          - KernelSU Next: ${{ github.event.inputs.ksu == 'y' && 'Included' || 'Not Included' }}
-          - Clean Build: ${{ github.event.inputs.clean == 'y' && 'Yes' || 'No' }}
-          - Toolchain: ${{ github.event.inputs.toolchain }}
-        draft: false
-        prerelease: false
-
-    - name: Notify build success
-      if: success()
-      run: |
-        echo "✅ Kernel build completed successfully!"
-        ls -la build/export/
-
-    - name: Notify build failure
-      if: failure()
-      run: |
-        echo "❌ Kernel build failed!"
-        exit 1
+      - name: Cleanup Artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: S*
