@@ -210,19 +210,19 @@ jobs:
           # Buat pesan Telegram (TANPA indentasi yang salah)
           MESSAGE="🚀 *BatAxeKernel $VERSION Released!*
 
-⚙️ *Build Information:*
-• *Version:* $VERSION
-• *Build Date:* $BUILD_DATE
-• *Toolchain:* Clang $TOOLCHAIN
-• *KernelSU Next:* $KERNELSU
-• *Supported Devices:* $DEVICE_COUNT devices
+          ⚙️ *Build Information:*
+            • *Version:* $VERSION
+            • *Build Date:* $BUILD_DATE
+            • *Toolchain:* Clang $TOOLCHAIN
+            • *KernelSU Next:* $KERNELSU
+            • *Supported Devices:* $DEVICE_COUNT devices
 
-📥 *Download:* [GitHub Release]($RELEASE_URL)
+          📥 *Download:* [GitHub Release]($RELEASE_URL)
 
-💬 *Discussion Group:*
-https://t.me/PapaL3xaKernel/2
+          💬 *Discussion Group:*
+              https://t.me/PapaL3xaKernel/2
 
-🔧 *Note:* Flash via custom recovery and backup first!"
+          🔧 *Note:* Flash via custom recovery and backup first!"
 
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
@@ -249,19 +249,19 @@ https://t.me/PapaL3xaKernel/2
           # Buat pesan Telegram (TANPA indentasi yang salah)
           MESSAGE="🚀 *BatAxeKernel $VERSION Released!*
 
-⚙️ *Build Information:*
-• *Version:* $VERSION
-• *Build Date:* $BUILD_DATE
-• *Toolchain:* Clang $TOOLCHAIN
-• *KernelSU Next:* $KERNELSU
-• *Supported Devices:* $DEVICE_COUNT devices
+          ⚙️ *Build Information:*
+            • *Version:* $VERSION
+            • *Build Date:* $BUILD_DATE
+            • *Toolchain:* Clang $TOOLCHAIN
+            • *KernelSU Next:* $KERNELSU
+            • *Supported Devices:* $DEVICE_COUNT devices
 
-📥 *Download:* [GitHub Release]($RELEASE_URL)
+          📥 *Download:* [GitHub Release]($RELEASE_URL)
 
-💬 *Discussion Group:*
-https://t.me/PapaL3xaKernel/2
+          💬 *Discussion Group:*
+              https://t.me/PapaL3xaKernel/2
 
-🔧 *Note:* Flash via custom recovery and backup first!"
+          🔧 *Note:* Flash via custom recovery and backup first!"
 
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
