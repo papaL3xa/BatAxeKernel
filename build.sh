@@ -105,21 +105,25 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --llvm|-l)
-            USE_NEUTRON=true
-
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
-                USE_NEUTRON=false
-            fi
-
             if [[ -n "$2" && "$2" != -* ]]; then
-                NEUTRON="$2"
+                LLVM="$2"
                 shift 2
             else
-                NEUTRON=10032024
+                LLVM=21
                 shift
             fi
+            
+            # Check if LLVM version is between 12-21
+            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
+                USE_NEUTRON=false
+                echo "-- Using Clang $LLVM"
+            else
+                USE_NEUTRON=true
+                NEUTRON="${LLVM:-10032024}"
+                echo "-- Using Neutron Clang ($NEUTRON)"
+            fi
             ;;
-        *)\
+        *)
             usage
             exit 1
             ;;
@@ -312,59 +316,15 @@ toolchain ()
         KERNELCLANG=NeutronClang-$NEUTRON
         CLANG_INFO="Neutron Clang ($NEUTRON)"
         TOOLCHAIN_PATH="toolchain/neutron-$NEUTRON"
-    else
-        if [[ "$LLVM" == "12" ]]; then
-            CLANG=416183b1 # Clang 12.0.7
-        elif [[ "$LLVM" == "13" ]]; then
-            CLANG=433403b # Clang 13.0.3
-        elif [[ "$LLVM" == "14" ]]; then
-            CLANG=450784 # Clang 14.0.3
-        elif [[ "$LLVM" == "15" ]]; then
-            CLANG=468909b # Clang 15.0.3
-        elif [[ "$LLVM" == "16" ]]; then
-            CLANG=475365b # Clang 16.0.2
-        elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4
-        elif [[ "$LLVM" == "18" ]]; then
-            CLANG=522817 # Clang 18.0.1
-        elif [[ "$LLVM" == "19" ]]; then
-            CLANG=536225 # Clang 19.0.1            
+        
+        quotes "Using $CLANG_INFO"
+        
+        if test -d "$TOOLCHAIN_PATH"; then
+            quotes "$CLANG_INFO Directory Found!"
         else
-            LLVM=20
-            CLANG=547379 # Clang 20.0.0
-        fi
-
-        KERNELCLANG=Clang$LLVM
-
-        if [[ "$LLVM" == "12" ]]; then
-            MINOR=".0.5"
-        elif [[ "$LLVM" == "13" ]] || [[ "$LLVM" == "14" ]] || [[ "$LLVM" == "15" ]]; then
-            MINOR=".0.3"
-        elif [[ "$LLVM" == "16" ]]; then
-            MINOR=".0.2"
-        elif [[ "$LLVM" == "17" ]]; then
-            MINOR=".0.4"
-        else
-            MINOR=".0.1"
-        fi
-
-        CLANG_VERSION="r$CLANG"
-        CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
-        TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
-        CLIB=":$CLANG_DIR/lib"
-        CARGS="
-            CC=clang \
-            READELF=$CLANG_DIR/bin/llvm-readelf \
-        "
-    fi
-
-    if test -d "$TOOLCHAIN_PATH"; then
-        quotes "$CLANG_INFO Directory Found!"
-    else
-        if [[ "$USE_NEUTRON" == "true" ]]; then
             rm -rf $TOOLCHAIN_PATH
             mkdir -p $TOOLCHAIN_PATH
-            quotes "Add $CLANG_INFO"
+            quotes "Downloading $CLANG_INFO"
             separator
             cd $TOOLCHAIN_PATH
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
@@ -375,46 +335,138 @@ toolchain ()
                 sudo apt install -y file
             fi
             separator
-            quotes "Paching glibc"
+            quotes "Patching glibc"
             separator
             bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
             cd $OLDPWD
             separator
-            check "Neutron Clang 18"
-        else
-            if [[ "$LLVM" == "12" ]]; then
-                HOST=hub # GitHub
-                ROM="ArrowOS-Devices" # ArrowOS
-            else
-                HOST=lab # GitLab
-                ROM=crdroidandroid # crDroid
-            fi
+            check "Neutron Clang"
+        fi
+        
+        ORIG_PATH=$PATH
+        CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
+        PATH="$CLANG_DIR/bin:$ORIG_PATH"
+        
+        ARGS="
+            ARCH=arm64 O=out \
+            LLVM=1 LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            READELF=llvm-readelf \
+            OBJSIZE=llvm-size \
+        "
+    else
+        # Set Clang version based on LLVM selection
+        case $LLVM in
+            12)
+                CLANG=416183b1 # Clang 12.0.7
+                MINOR=".0.5"
+                HOST=hub
+                ROM="ArrowOS-Devices"
+                ;;
+            13)
+                CLANG=433403b # Clang 13.0.3
+                MINOR=".0.3"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            14)
+                CLANG=450784 # Clang 14.0.3
+                MINOR=".0.3"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            15)
+                CLANG=468909b # Clang 15.0.3
+                MINOR=".0.3"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            16)
+                CLANG=475365b # Clang 16.0.2
+                MINOR=".0.2"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            17)
+                CLANG=498229b # Clang 17.0.4
+                MINOR=".0.4"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            18)
+                CLANG=522817 # Clang 18.0.1
+                MINOR=".0.1"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            19)
+                CLANG=536225 # Clang 19.0.1
+                MINOR=".0.1"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            20)
+                CLANG=547379 # Clang 20.0.0
+                MINOR=".0.0"
+                HOST=lab
+                ROM=crdroidandroid
+                ;;
+            21)
+                CLANG=563880 # Clang 21.0.0
+                MINOR=".0.0"
+                HOST=lab
+                ROM="reaPeR1010"
+                ;;
+            *)
+                LLVM=21
+                CLANG=563880 # Clang 21.0.0
+                MINOR=".0.0"
+                HOST=lab
+                ROM="reaPeR1010"
+                ;;
+        esac
 
+        KERNELCLANG=Clang$LLVM
+        CLANG_VERSION="r$CLANG"
+        CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
+        TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
+
+        quotes "Using $CLANG_INFO"
+
+        if test -d "$TOOLCHAIN_PATH"; then
+            quotes "$CLANG_INFO Directory Found!"
+        else
             TOOLCHAIN_URL="https://git$HOST.com/$ROM/android_prebuilts_clang_host_linux-x86_clang-$CLANG_VERSION.git"
 
-            quotes "Add $CLANG_INFO as Submodule"
+            quotes "Downloading $CLANG_INFO"
             git submodule add -f -q "$TOOLCHAIN_URL" "$TOOLCHAIN_PATH" > /dev/null
             check "clang-$CLANG_VERSION"
         fi
+
+        ORIG_PATH=$PATH
+        CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
+        PATH="$CLANG_DIR/bin:$ORIG_PATH"
+
+        ARGS="
+            ARCH=arm64 O=out \
+            LLVM=1 LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            READELF=llvm-readelf \
+            OBJSIZE=llvm-size \
+        "
     fi
-
-    ORIG_PATH=$PATH
-    CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
-    PATH="$CLANG_DIR/bin$CLIB:$ORIG_PATH"
-
-    ARGS="
-        ARCH=arm64 O=out \
-        LLVM=1 LLVM_IAS=1 \
-        $CARGS
-    "
-}
-
-submodule () {
-    separator
-    quotes "Fetch all Submodules Update"
-
-    git submodule update -f -q --init --recursive > /dev/null
-    check "Submodules"
 }
 
 kernelsu ()
@@ -446,9 +498,8 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/KernelSU-Next-gorhanhee/2e9038e96c0f7a05d0a36daf331b7cc6d1ab17e4/kernel/setup.sh" | bash -
-        separator
+git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
+        curl -LSs "https://github.com/papaL3xa/KernelSU-Next-gorhanhee/raw/refs/heads/KSUNOG/kernel/setup.sh" | bash -
         check "KernelSU Next"
     fi
 
