@@ -116,24 +116,23 @@ jobs:
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
           - **KernelSU Next:** ${{ github.event.inputs.ksun }}
 
-          ##📱 Supported Devices
+          ## 📱 Supported Devices
           $(cat devices.txt)
 
-          ## Installation
+          ## 📥 Installation
           1. Download the appropriate zip file for your device
           2. Flash via custom recovery (TWRP/OrangeFox)
           3. Reboot and enjoy!
 
-          ## Notes
+          ## 💡 Notes
           - Make sure you're on the latest firmware
           - Backup your current kernel before flashing
           - Report any issues on GitHub Issues
-          EOF
 
-          ## For Discussions:
+          ## 💬 Discussions
           [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
           EOF
-          
+
           # Set output tanpa escaping
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat release_body.md >> $GITHUB_OUTPUT
