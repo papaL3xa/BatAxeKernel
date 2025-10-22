@@ -108,31 +108,32 @@ jobs:
           
           # Buat release body dengan format yang benar
           cat << EOF > release_body.md
-# 🚀 BatAxe Kernel ${{ github.event.inputs.version }} Release
+          # 🚀 BatAxe Kernel ${{ github.event.inputs.version }} Release
 
-**⚙️ Build Information:**
-- **Kernel Version:** ${{ github.event.inputs.version }}
-- **Build Date:** $(date +'%Y-%m-%d')
-- **Toolchain:** Clang ${{ github.event.inputs.llvm }}
-- **KernelSU Next:** ${{ github.event.inputs.ksun }}
+          **⚙️ Build Information:**
+          - **Kernel Version:** ${{ github.event.inputs.version }}
+          - **Build Date:** $(date +'%Y-%m-%d')
+          - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
+          - **KernelSU Next:** ${{ github.event.inputs.ksun }}
 
-## 📱 Supported Devices
-$(cat devices.txt)
+          ##📱 Supported Devices
+          $(cat devices.txt)
 
-## 📥 Installation
-1. Download the appropriate zip file for your device
-2. Flash via custom recovery (TWRP/OrangeFox)
-3. Reboot and enjoy!
+          ## Installation
+          1. Download the appropriate zip file for your device
+          2. Flash via custom recovery (TWRP/OrangeFox)
+          3. Reboot and enjoy!
 
-## 💡 Notes
-- Make sure you're on the latest firmware
-- Backup your current kernel before flashing
-- Report any issues on GitHub Issues
+          ## Notes
+          - Make sure you're on the latest firmware
+          - Backup your current kernel before flashing
+          - Report any issues on GitHub Issues
+          EOF
 
-## 💬 Discussions
-[Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
-EOF
-
+          ## For Discussions:
+          [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
+          EOF
+          
           # Set output tanpa escaping
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat release_body.md >> $GITHUB_OUTPUT
