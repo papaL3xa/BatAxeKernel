@@ -108,9 +108,9 @@ jobs:
           
           # Buat release body dengan format yang benar
           cat << EOF > release_body.md
-          # 🚀 BatAxe Kernel ${{ github.event.inputs.version }} Release
+          # 🚀 BatAxeKernel ${{ github.event.inputs.version }} for OneUI 4.X - Release
 
-          **⚙️ Build Information:**
+          ## ⚙️ Build Information:
           - **Kernel Version:** ${{ github.event.inputs.version }}
           - **Build Date:** $(date +'%Y-%m-%d')
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
