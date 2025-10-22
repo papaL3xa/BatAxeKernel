@@ -177,8 +177,24 @@ jobs:
           echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_ENV
           echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
 
+      - name: Check Telegram Credentials
+        id: check_telegram
+        run: |
+          # Cek apakah credentials Telegram tersedia
+          if [ -n "${{ github.event.inputs.telegram_token }}" ] && [ -n "${{ github.event.inputs.telegram_chat_id }}" ]; then
+            echo "Using input credentials"
+            echo "use_inputs=true" >> $GITHUB_OUTPUT
+          elif [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            echo "Using secret credentials"
+            echo "use_secrets=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Telegram credentials available"
+            echo "use_inputs=false" >> $GITHUB_OUTPUT
+            echo "use_secrets=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send Telegram Notification via Inputs
-        if: github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != ''
+        if: steps.check_telegram.outputs.use_inputs == 'true'
         run: |
           TELEGRAM_TOKEN="${{ github.event.inputs.telegram_token }}"
           CHAT_ID="${{ github.event.inputs.telegram_chat_id }}"
@@ -191,23 +207,24 @@ jobs:
           # Hitung jumlah device
           DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
           
-          # Buat pesan Telegram
+          # Buat pesan Telegram (TANPA indentasi yang salah)
           MESSAGE="🚀 *BatAxeKernel $VERSION Released!*
 
-          ⚙️ *Build Information:*
-            • *Version:* $VERSION
-            • *Build Date:* $BUILD_DATE
-            • *Toolchain:* Clang $TOOLCHAIN
-            • *KernelSU Next:* $KERNELSU
-            • *Supported Devices:* $DEVICE_COUNT devices
+⚙️ *Build Information:*
+• *Version:* $VERSION
+• *Build Date:* $BUILD_DATE
+• *Toolchain:* Clang $TOOLCHAIN
+• *KernelSU Next:* $KERNELSU
+• *Supported Devices:* $DEVICE_COUNT devices
 
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
+📥 *Download:* [GitHub Release]($RELEASE_URL)
 
-          💬 *Discussion Group:*
-              https://t.me/PapaL3xaKernel/2
+💬 *Discussion Group:*
+https://t.me/PapaL3xaKernel/2
 
-          🔧 *Note:* Flash via custom recovery and backup first!"
+🔧 *Note:* Flash via custom recovery and backup first!"
 
+          echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
             -d chat_id="$CHAT_ID" \
@@ -216,7 +233,7 @@ jobs:
             -d disable_web_page_preview="true"
 
       - name: Send Telegram Notification via Secrets
-        if: github.event.inputs.telegram_token == '' && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
+        if: steps.check_telegram.outputs.use_secrets == 'true'
         run: |
           TELEGRAM_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
           CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
@@ -229,29 +246,35 @@ jobs:
           # Hitung jumlah device
           DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
           
-          # Buat pesan Telegram
+          # Buat pesan Telegram (TANPA indentasi yang salah)
           MESSAGE="🚀 *BatAxeKernel $VERSION Released!*
 
-          ⚙️ *Build Information:*
-            • *Version:* $VERSION
-            • *Build Date:* $BUILD_DATE
-            • *Toolchain:* Clang $TOOLCHAIN
-            • *KernelSU Next:* $KERNELSU
-            • *Supported Devices:* $DEVICE_COUNT devices
+⚙️ *Build Information:*
+• *Version:* $VERSION
+• *Build Date:* $BUILD_DATE
+• *Toolchain:* Clang $TOOLCHAIN
+• *KernelSU Next:* $KERNELSU
+• *Supported Devices:* $DEVICE_COUNT devices
 
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
+📥 *Download:* [GitHub Release]($RELEASE_URL)
 
-          💬 *Discussion Group:*
-              https://t.me/PapaL3xaKernel/2
+💬 *Discussion Group:*
+https://t.me/PapaL3xaKernel/2
 
-          🔧 *Note:* Flash via custom recovery and backup first!"
+🔧 *Note:* Flash via custom recovery and backup first!"
 
+          echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
             -d chat_id="$CHAT_ID" \
             -d text="$MESSAGE" \
             -d parse_mode="Markdown" \
             -d disable_web_page_preview="true"
+
+      - name: Skip Telegram Notification
+        if: steps.check_telegram.outputs.use_inputs == 'false' && steps.check_telegram.outputs.use_secrets == 'false'
+        run: |
+          echo "Skipping Telegram notification - no credentials provided"
 
       - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
