@@ -80,7 +80,7 @@ jobs:
           path: "build/export/*.zip"
           if-no-files-found: error
 
-    release:
+  release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
