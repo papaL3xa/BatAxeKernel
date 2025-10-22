@@ -80,7 +80,7 @@ jobs:
           path: "build/export/*.zip"
           if-no-files-found: error
 
-  release:
+    release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -92,15 +92,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Show Artifacts Structure
+      - name: List Artifact Files
+        id: list-files
         run: |
-          echo "Artifacts directory structure:"
-          find artifacts -type f -name "*.zip" | sort
-          echo "Total kernel files found:"
-          find artifacts -type f -name "*.zip" | wc -l
+          echo "Listing all artifact files:"
+          find artifacts -name "*.zip" -type f | while read file; do
+            echo "Found: $file"
+          done
+          
+          # Create comma-separated list of device names
+          DEVICE_LIST=$(find artifacts -name "*.zip" -type f | xargs -I {} basename {} .zip | sort | tr '\n' ',' | sed 's/,$//')
+          echo "device_list=$DEVICE_LIST" >> $GITHUB_OUTPUT
+          echo "Devices: $DEVICE_LIST"
 
-      - name: Create Simple Release Body
-        id: release-body
+      - name: Create Release Body
+        id: create-body
         run: |
           RELEASE_BODY="# BatAxe Kernel ${{ github.event.inputs.version }} Release
 
@@ -109,10 +115,9 @@ jobs:
           - **Build Date:** $(date +'%Y-%m-%d')
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
           - **KernelSU Next:** ${{ github.event.inputs.ksun }}
-          - **Devices Built:** ${{ matrix.device }}
 
           ## Supported Devices
-          - $(find artifacts -name "*.zip" -exec basename {} \; | sed 's/.zip//' | sort | tr '\n' ',' | sed 's/,/, /g' | sed 's/, $//')
+          - ${{ steps.list-files.outputs.device_list }}
 
           ## Installation
           1. Download the appropriate zip file for your device
@@ -124,24 +129,32 @@ jobs:
           - Backup your current kernel before flashing
           - Report any issues on GitHub Issues"
 
-          # Escape for output
+          # Save to file for debugging
+          echo "$RELEASE_BODY" > release_body.md
+          
+          # Set output with proper escaping
           RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
           RELEASE_BODY="${RELEASE_BODY//$'\n'/'%0A'}"
           RELEASE_BODY="${RELEASE_BODY//$'\r'/'%0D'}"
           
-          echo "release_body=$RELEASE_BODY" >> $GITHUB_OUTPUT    
+          echo "body=$RELEASE_BODY" >> $GITHUB_OUTPUT
+
+      - name: Debug Release Body
+        run: |
+          echo "Release body content:"
+          cat release_body.md
 
       - name: Release Build Kernel
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "${{ github.event.inputs.tag }}"
+          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          body: ${{ steps.create-body.outputs.body }}
           draft: true
-          generateReleaseNotes: true
+          generateReleaseNotes: false  # Nonaktifkan karena kita pakai custom body
           makeLatest: true
           skipIfReleaseExists: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          removeArtifacts: true
           artifacts: "artifacts/**/*.zip"
 
       - name: Cleanup Artifacts
