@@ -493,13 +493,12 @@ kernelsu ()
         separator
 
         if test -d "KernelSU-Next"; then
-            rm -rf KernelSU-Next-gorhanhee
             rm -rf KernelSU-Next
             rm -rf Ke*
         fi
 
-git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
-        curl -LSs "https://github.com/papaL3xa/KernelSU-Next-gorhanhee/raw/refs/heads/KSUNOG/kernel/setup.sh" | bash -
+git clone -b kernelSU-drivers https://github.com/papaL3xa/BatAxeKernel.git KernelSU-Next > /dev/null
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/BatAxeKernel/refs/heads/KernelSU-Next/kernel/setup.sh" | bash -
         check "KernelSU Next"
     fi
 
