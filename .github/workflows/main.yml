@@ -1,5 +1,5 @@
-name: Build (Release)
-run-name: 'Release: Build ${{ github.event.inputs.version }} from ${{ github.sha }}'
+name: Build (Release-Telegram)
+run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -7,21 +7,48 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: 'v'
+        default: ''
+      tag:
+        description: 'Release Tag'
+        required: true
+        default: 'v'  
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
         default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
-        description: 'Clang (12-18) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
-        default: 'latest'
-      tag:
-        description: 'Release Tag'
-        required: true
-        default: 'v'
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
       token:
         description: 'Token (Leave Empty to Use GitHub Token)'
+        required: false
+        default: ''
+        type: string
+      telegram_token:
+        description: 'Telegram Bot Token (Leave Empty to Use Secret Token)'
+        required: false
+        default: ''
+        type: string
+      telegram_chat_id:
+        description: 'Telegram Chat ID (Leave Empty to Use Secret Token)'
         required: false
         default: ''
         type: string
@@ -36,30 +63,39 @@ jobs:
         device: [beyond0lte, beyond1lte, beyond2lte, beyondx, d1, d1xks, d2s, d2x]
 
     steps:
-      - name: Checkout Tree
+      - name: 📀 Checkout Tree
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Setup Build Environment
+      - name: ⏰ Set Time Zone
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
+          sudo timedatectl set-timezone Asia/Singapore
+
+      - name: 🪡 Setup Build Environment
+        run: |
+          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq
           
-      - name: Set Environment Variable
+      - name: 💼 Set Environment Variable
         run: |
           SHA=$(git rev-parse --short ${{ github.sha }})
           echo BUILD_DATE=$(date +'%Y%m%d') >> $GITHUB_ENV
           echo COMMIT_SHA=$SHA >> $GITHUB_ENV
           echo BUILD_KERNEL_VERSION=${{ github.event.inputs.version }} >> $GITHUB_ENV
-          
-      - name: Building Kernel
+
+      - name: ⭐Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: 🏇🏻 Building Kernel
         run: |
             bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
 
-      - name: Upload Kernel
+      - name: 🧩 Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "StardustKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.clang }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           if-no-files-found: error
 
@@ -75,20 +111,187 @@ jobs:
         with:
           path: artifacts
 
-      - name: Release Build Kernel
+      - name: List Artifact Files
+        id: list-files
+        run: |
+          echo "Listing all artifact files:"
+          find artifacts -name "*.zip" -type f | while read file; do
+            echo "Found: $file"
+          done
+
+      - name: Create Release Body
+        id: create-body
+        run: |
+          # Format device list dengan bullet points
+          find artifacts -name "*.zip" -type f | xargs -I {} basename {} .zip | sort | sed 's/^/- /' > devices.txt
+          
+          # Buat release body dengan format yang benar
+          cat << EOF > release_body.md
+          # 🚀 BatAxeKernel ${{ github.event.inputs.version }} for OneUI 4.X - Release
+
+          ## ⚙️ Build Information:
+          - **Kernel Version:** ${{ github.event.inputs.version }}
+          - **Build Date:** $(date +'%Y-%m-%d')
+          - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
+          - **KernelSU Next:** ${{ github.event.inputs.ksun }}
+
+          ## 📱 Supported Devices
+          $(cat devices.txt)
+
+          ## 📥 Installation
+          1. Download the appropriate zip file for your device
+          2. Flash via custom recovery (TWRP/OrangeFox)
+          3. Reboot and enjoy!
+
+          ## 💡 Notes
+          - Make sure you're on the latest firmware
+          - Backup your current kernel before flashing
+          - Report any issues on GitHub Issues
+
+          ## 💬 Discussions
+          [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
+          EOF
+
+          # Set output tanpa escaping
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          cat release_body.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name:  Debug Release Body
+        run: |
+          echo "Release body content:"
+          cat release_body.md
+          echo ""
+          echo "Total devices found:"
+          find artifacts -name "*.zip" -type f | wc -l
+
+      - name: 🚀 Release Build Kernel
+        id: create_release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "${{ github.event.inputs.tag }}"
+          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          body: ${{ steps.create-body.outputs.body }}
           draft: true
-          generateReleaseNotes: true
+          generateReleaseNotes: false
           makeLatest: true
           skipIfReleaseExists: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          removeArtifacts: true
           artifacts: "artifacts/**/*.zip"
+
+      - name: Get Release URL
+        id: get_release_url
+        run: |
+          RELEASE_URL="${{ steps.create_release.outputs.html_url }}"
+          echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_ENV
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+
+      - name: Check Telegram Credentials
+        id: check_telegram
+        run: |
+          # Cek apakah credentials Telegram tersedia
+          if [ -n "${{ github.event.inputs.telegram_token }}" ] && [ -n "${{ github.event.inputs.telegram_chat_id }}" ]; then
+            echo "Using input credentials"
+            echo "use_inputs=true" >> $GITHUB_OUTPUT
+          elif [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            echo "Using secret credentials"
+            echo "use_secrets=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Telegram credentials available"
+            echo "use_inputs=false" >> $GITHUB_OUTPUT
+            echo "use_secrets=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Telegram Notification via Inputs
+        if: steps.check_telegram.outputs.use_inputs == 'true'
+        run: |
+          TELEGRAM_TOKEN="${{ github.event.inputs.telegram_token }}"
+          CHAT_ID="${{ github.event.inputs.telegram_chat_id }}"
+          RELEASE_URL="${{ env.RELEASE_URL }}"
+          VERSION="${{ github.event.inputs.version }}"
+          TOOLCHAIN="${{ github.event.inputs.llvm }}"
+          KERNELSU="${{ github.event.inputs.ksun }}"
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          
+          # Hitung jumlah device
+          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+          
+          # Buat pesan Telegram (TANPA indentasi yang salah)
+          MESSAGE="🚀 *BatAxeKernel $VERSION for OneUI 4.X - Released!*
+
+          ⚙️ *Build Information:*
+            • *Version:* $VERSION
+            • *Build Date:* $BUILD_DATE
+            • *Toolchain:* Clang $TOOLCHAIN
+            • *KernelSU Next:* $KERNELSU
+            • *Supported Devices:* $DEVICE_COUNT devices
+                - d1, d1xks, d2s, d2x (Note10 Series)
+                - beyond0lte, beyond1lte, beyond2lte, beyondx (S10 Series)
+
+          📥 *Download:* [GitHub Release]($RELEASE_URL)
+
+          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
+
+          🔧 *Note:* Flash via custom recovery and backup first!"
+
+          *Thank YOu For trusting this Build
+
+          echo "Sending Telegram notification..."
+          # Kirim pesan ke Telegram
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d text="$MESSAGE" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview="true"
+
+      - name: 🚀 Send Telegram Notification via Secrets
+        if: steps.check_telegram.outputs.use_secrets == 'true'
+        run: |
+          TELEGRAM_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+          RELEASE_URL="${{ env.RELEASE_URL }}"
+          VERSION="${{ github.event.inputs.version }}"
+          TOOLCHAIN="${{ github.event.inputs.llvm }}"
+          KERNELSU="${{ github.event.inputs.ksun }}"
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          
+          # Hitung jumlah device
+          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+          
+          # Buat pesan Telegram (TANPA indentasi yang salah)
+          MESSAGE="🚀 *BatAxeKernel $VERSION Released!*
+
+          ⚙️ *Build Information:*
+            • *Version:* $VERSION
+            • *Build Date:* $BUILD_DATE
+            • *Toolchain:* Clang $TOOLCHAIN
+            • *KernelSU Next:* $KERNELSU
+            • *Supported Devices:* $DEVICE_COUNT devices
+                - d1, d1xks, d2s, d2x (Note10 Series)
+                - beyond0lte, beyond1lte, beyond2lte, beyondx (S10 Series)
+
+          📥 *Download:* [GitHub Release]($RELEASE_URL)
+
+          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
+
+          🔧 *Note:* Flash via custom recovery and backup first!"
+
+          *Thank YOu For trusting this Build
+
+          echo "Sending Telegram notification..."
+          # Kirim pesan ke Telegram
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d text="$MESSAGE" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview="true"
+
+      - name: Skip Telegram Notification
+        if: steps.check_telegram.outputs.use_inputs == 'false' && steps.check_telegram.outputs.use_secrets == 'false'
+        run: |
+          echo "Skipping Telegram notification - no credentials provided"
 
       - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
-          name: S*
+          name: "BatAxeKernel-*"
