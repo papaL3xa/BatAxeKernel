@@ -234,7 +234,7 @@ jobs:
 
           🔧 *Note:* Flash via custom recovery and backup first!"
 
-          *Thank YOu For trusting this Build
+          🤩 *Thank You For trusting this Build* 🤩
 
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
@@ -276,7 +276,7 @@ jobs:
 
           🔧 *Note:* Flash via custom recovery and backup first!"
 
-          *Thank YOu For trusting this Build
+          🤩 *Thank YOu For trusting this Build* 🤩
 
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
