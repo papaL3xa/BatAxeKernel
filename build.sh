@@ -135,7 +135,7 @@ detect_env() {
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/StardustMod/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
