@@ -13,9 +13,22 @@ on:
         required: true
         default: 'y'
       llvm:
-        description: 'Clang (12-20) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
-        default: 'latest'
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
       devices:
         description: 'Devices'
         required: true
