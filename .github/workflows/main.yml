@@ -234,8 +234,6 @@ jobs:
 
           🔧 *Note:* Flash via custom recovery and backup first!"
 
-          🤩 *Thank You For trusting this Build* 🤩
-
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
@@ -275,8 +273,6 @@ jobs:
           💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
 
           🔧 *Note:* Flash via custom recovery and backup first!"
-
-          🤩 *Thank YOu For trusting this Build* 🤩
 
           echo "Sending Telegram notification..."
           # Kirim pesan ke Telegram
