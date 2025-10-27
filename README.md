@@ -1,5 +1,5 @@
 <div align="center">
-  <img loading="lazy" src="https://github.com/papaL3xa/builds/blob/brain/KARUNG/bataxe.png"/>
+  <img loading="lazy" src="https://github.com/papaL3xa/builds/blob/exynos9820/BatAxeBanner.png"/>
 </div>
 <h1 align="center">BatAxeKernel 🦇 for Galaxy S10/Note10 devices.</h1>
 
