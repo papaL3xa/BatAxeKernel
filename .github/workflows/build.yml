@@ -13,9 +13,22 @@ on:
         required: true
         default: 'y'
       llvm:
-        description: 'Clang (12-18) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
-        default: 'latest'
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
       devices:
         description: 'Devices'
         required: true
@@ -60,6 +73,14 @@ jobs:
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA" >> $GITHUB_ENV
           echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
+
+      - name: ⭐Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: ⚙️ setting permission
+        run: chmod +x build.sh
 
       - name: 🏇🏻 Building Kernel
         run: |

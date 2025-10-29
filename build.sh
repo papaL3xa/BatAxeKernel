@@ -135,7 +135,7 @@ detect_env() {
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/StardustMod/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
@@ -424,43 +424,17 @@ setup_clang_environment() {
 
 kernelsu() {
     separator
-
-    # Nonaktifkan patch KernelSU (dikomentari)
-    # if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-    #     quotes "Patching KernelSU to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
-    #     separator
-    #     check "KernelSU"
-    # fi
-
-    # Setup KernelSU Next
-    if ! test -d "drivers/kernelsu"; then
-        quotes "Add KernelSU Next as Submodule"
-        separator
-
-        # Clean existing KernelSU directories
-        if test -d "KernelSU-Next"; then
-            rm -rf KernelSU-Next-gorhanhee
-            rm -rf KernelSU-Next
-            rm -rf Ke*
-        fi
-
-        # Add KernelSU Next submodule
-        git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
-        curl -LSs "https://github.com/papaL3xa/KernelSU-Next-gorhanhee/raw/refs/heads/next-susfs-experimental/kernel/setup.sh" | bash -
-        check "KernelSU Next"
+    quotes "Checking KernelSU Next Directory"
+    
+    # Cek apakah drivers/kernelsu sudah ada
+    if test -d "drivers/kernelsu"; then
+        quotes "KernelSU Next Directory Found!"
+    else
+        quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
+        abort
     fi
-
-    # Nonaktifkan patch SuSFS (dikomentari)
-    # if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-    #     separator
-    #     quotes "Patching SuSFS to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
-    #     separator
-    #     check "SuSFS"
-    # fi
+    
+    check "KernelSU Setup"
 }
 
 # =============================================================================
@@ -828,10 +802,10 @@ main() {
             submodule
         fi
 
-        # Setup KernelSU jika diaktifkan
         if [[ "$KSU" == "y" ]]; then
+            quotes "KernelSU enabled - assuming manual submodule setup"
             KSU_NEXT=ksu.config
-            kernelsu
+            # kernelsu  # Dikomentari karena submodule sudah diatur manual
         fi
 
         # Build process
