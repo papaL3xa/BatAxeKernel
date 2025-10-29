@@ -83,14 +83,6 @@ jobs:
           echo COMMIT_SHA=$SHA >> $GITHUB_ENV
           echo BUILD_KERNEL_VERSION=${{ github.event.inputs.version }} >> $GITHUB_ENV
 
-      - name: ⭐Checkout repository with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-     
-      - name: ⚙️ setting permission
-        run: chmod +x build.sh
-
       - name: 🏇🏻 Building Kernel
         run: |
             bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y

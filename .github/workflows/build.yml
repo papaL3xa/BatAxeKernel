@@ -74,11 +74,6 @@ jobs:
           echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA" >> $GITHUB_ENV
           echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
 
-      - name: ⭐Checkout repository with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
       - name: "💡 Setup KernelSu"
         run: |
           if [ -d "./KernelSU-Next" ]; then rm -rf "./KernelSU-Next"; fi
