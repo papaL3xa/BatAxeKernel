@@ -1,5 +1,5 @@
 name: Build-Test New SUSFS 1.5.12
-run-name: 'CI: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }} With Clang ${{ github.event.inputs.llvm }}'
+run-name: 'CI: Build ${{ github.event.inputs.version }} for ${{ github.event.inputs.devices }} with Clang ${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -7,13 +7,18 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: ''
+        default: '1.5.12'
+        type: string
       ksun:
-        description: 'Install KernelSU-Next ?'
+        description: 'Install KernelSU-Next?'
         required: true
         default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
-        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
+        description: 'Clang/Neutron Version'
         required: true
         default: '10032024'
         type: choice
@@ -30,65 +35,88 @@ on:
           - '21'
           - '10032024'
       devices:
-        description: 'Devices'
+        description: 'Target Devices'
         required: true
         default: '["d1"]'
         type: choice
         options: 
-          - ["d1"]
-          - ["d1xks"]
-          - ["d2s"]
-          - ["d2x"]
-          - ["beyond0lte"]
-          - ["beyond1lte"]
-          - ["beyond2lte"]
-          - ["beyondx"]
+          - '["d1"]'
+          - '["d1xks"]'
+          - '["d2s"]'
+          - '["d2x"]'
+          - '["beyond0lte"]'
+          - '["beyond1lte"]'
+          - '["beyond2lte"]'
+          - '["beyondx"]'
+
+env:
+  TIMEZONE: Asia/Singapore
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 180
+    
     strategy:
       matrix:
         device: ${{ fromJSON(github.event.inputs.devices) }}
+      fail-fast: false
 
     steps:
-      - name: 📀 Checkout Tree
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          submodules: true
 
-      - name: ⏰ Set Time Zone
+      - name: 🕐 Configure Timezone
         run: |
-          sudo timedatectl set-timezone Asia/Singapore
+          sudo timedatectl set-timezone ${{ env.TIMEZONE }}
 
-      - name: 🪡 Setup Build Environment
+      - name: 🛠️ Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
-          
-      - name: 💼 Set Environment Variable
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc-aarch64-linux-gnu \
+            clang-${LLVM_VERSION} \
+            lld \
+            llvm \
+            libssl-dev \
+            bc \
+            flex \
+            bison \
+            git \
+            make
+        env:
+          LLVM_VERSION: ${{ github.event.inputs.llvm }}
+
+      - name: 📝 Set Build Variables
         run: |
-          SHA=$(git rev-parse --short ${{ github.sha }})
+          SHA=$(git rev-parse --short $GITHUB_SHA)
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
-          echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA" >> $GITHUB_ENV
+          echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-${SHA}" >> $GITHUB_ENV
           echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
 
-      - name: ⭐Checkout repository with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-           
-      - name: ⚙️ setting permission
+      - name: 🔧 Set Execute Permissions
         run: chmod +x build.sh
 
-      - name: 🏇🏻 Building Kernel
+      - name: 🏗️ Build Kernel
         run: |
-          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r n
+          set -e
+          echo "Building for device: ${{ matrix.device }}"
+          bash build.sh -m "${{ matrix.device }}" \
+                       -v "${{ env.BUILD_KERNEL_VERSION }}" \
+                       -k "${{ github.event.inputs.ksun }}" \
+                       -l "${{ github.event.inputs.llvm }}" \
+                       -r n
 
-      - name: 🧩 Upload Kernel
+      - name: 📦 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ env.BUILD_DEVICE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DEVICE }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/out/${{ matrix.device }}/zip/*"
+          retention-days: 30
           if-no-files-found: error
