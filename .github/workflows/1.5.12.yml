@@ -1,4 +1,4 @@
-name: Build-Test
+name: Build-Test 1.5.12
 run-name: 'CI: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }} With Clang ${{ github.event.inputs.llvm }}'
 
 on:
