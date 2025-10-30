@@ -147,9 +147,15 @@ detect_env() {
 
     [[ "$SOC" == "5" ]] && DEVICE=Note10 || DEVICE=S10
 
-    if [ ! -z $RELEASE ]; then
-        quotes "Running on GitHub Actions"
-        echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+    # Handle release flag untuk GitHub Actions vs Local
+    if [[ "$RELEASE" == "y" ]]; then
+        quotes "Running on GitHub Actions - Release Mode"
+        if [ ! -z $GITHUB_ENV ]; then
+            echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+        fi
+    elif [[ "$RELEASE" == "n" ]]; then
+        quotes "Running on GitHub Actions - CI Mode"
+        LOCAL=n
     else
         quotes "Running on Local Machine"
         LOCAL=y
@@ -163,6 +169,8 @@ detect_env() {
     setup_ramdisk
     setup_dtb_tools
     setup_module_files
+    
+    check "Build Environment"
 }
 
 setup_module_files() {
@@ -301,6 +309,8 @@ kernel() {
     noquotes "Defconfig: $KERNEL_DEFCONFIG"
     noquotes "Kernel Version: $KERNEL_VERSION"
     noquotes "Toolchain: $CLANG_INFO"
+    noquotes "Release Mode: $RELEASE"
+    noquotes "Local Build: $LOCAL"
 
     # Update kernel version
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
@@ -352,7 +362,7 @@ ramdisk() {
     
     # Create boot image
     cd build/AIK
-    ./repackimg.sh --original
+    ./repackimg.sh
     cd ../..
     
     check "Boot Image"
@@ -381,14 +391,20 @@ build_zip() {
     # Update updater script with build info
     sed -i "s/Kernel Version: /Kernel Version: $KERNEL_VERSION/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     sed -i "s/Device: /Device: $DEVICE ($MODEL)/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    sed -i "s/Toolchain: /Toolchain: $CLANG_INFO/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     
     # Create zip
     cd build/out/$MODEL/zip
-    zip -r9 ../$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE.zip .
+    if [[ "$RELEASE" == "y" ]]; then
+        ZIP_NAME="$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE-$KERNELCLANG.zip"
+    else
+        ZIP_NAME="$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE.zip"
+    fi
+    zip -r9 ../$ZIP_NAME .
     cd ../../..
-    mv build/out/$MODEL/$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE.zip build/export/
+    mv build/out/$MODEL/$ZIP_NAME build/export/
     
-    quotes "Zip created: build/export/$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE.zip"
+    quotes "Zip created: build/export/$ZIP_NAME"
 }
 
 # =============================================================================
@@ -402,20 +418,34 @@ Options:
     -m, --model MODEL      Device model (d2s, d1, d2x, etc) - default: d2s
     -k, --ksu [y/N]        Include KernelSU - default: y
     -v, --ver VERSION      Kernel version - default: Unofficial
+    -r, --release [y/N]    Release mode for GitHub Actions - default: n
     -l, --llvm VERSION     Clang version (12-21) or Neutron date - default: 21
     -c, --clean [y/N]      Clean build - default: n
     -h, --help             Show this help
+
+Examples:
+    $0 -m d2s -k y -v "v1.0" -r y          # Release build for d2s
+    $0 -m d1 -k n -r n                     # CI build for d1 without KernelSU
+    $0 -m d2x -l 17 -c y                   # Local build with Clang 17, clean build
 EOF
 }
 
 parse_arguments() {
     USE_NEUTRON=false
+    # Set default values
+    MODEL=""
+    KSU="y"
+    KERNEL_VERSION="Unofficial"
+    RELEASE="n"
+    LLVM=21
+    CLEAN="n"
     
     while [[ $# -gt 0 ]]; do
         case $1 in
             -m|--model) MODEL="$2"; shift 2 ;;
             -k|--ksu) KSU="$2"; shift 2 ;;
             -v|--ver) KERNEL_VERSION="$2"; shift 2 ;;
+            -r|--release) RELEASE="$2"; shift 2 ;;
             -l|--llvm) 
                 if [[ "$2" =~ ^[0-9]+$ ]] && [[ "$2" -ge 12 ]] && [[ "$2" -le 21 ]]; then
                     LLVM="$2"
