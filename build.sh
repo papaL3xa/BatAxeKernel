@@ -160,7 +160,7 @@ detect_env() {
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Adding Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null
         check "Android Image Kitchen Directory"
     fi
 
@@ -200,7 +200,7 @@ setup_ramdisk() {
 
     if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
-        rm -rf build/AIK/ramdisk/f*
+        rm -rf build/AIK/ramdisk/fstab.exynos982*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
         check "Fstab for Exynos 982$SOC"
     fi
@@ -259,19 +259,26 @@ setup_module_files() {
         check "Module Binary"
     fi
 
-    quotes "Getting Module Props"
-    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.prop build/
-    check "Module Props"
+    if ! test -f "build/module.prop"; then
+        quotes "Getting Module Props"
+        curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" 
+        mv *.prop build/ 2>/dev/null || true
+        check "Module Props"
+    fi
 
     if ! test -f "build/update-binary"; then
         quotes "Getting Kernel Zip Binary"
         curl -LOSs "${REPO_URL}toolchains/update-binary"
+        mv update-binary build/ 2>/dev/null || true
         check "Kernel Zip Binary"
     fi
 
-    quotes "Getting Kernel Zip Script"
-    curl -LOSs "${BUILD_URL}updater-script" && mv updater-script build/
-    check "Kernel Zip Script"
+    if ! test -f "build/updater-script"; then
+        quotes "Getting Kernel Zip Script"
+        curl -LOSs "${BUILD_URL}updater-script"
+        mv updater-script build/ 2>/dev/null || true
+        check "Kernel Zip Script"
+    fi
 }
 
 # =============================================================================
@@ -547,7 +554,7 @@ dtb() {
 }
 
 # =============================================================================
-# FUNGSI BUILD RAMDISK
+# FUNGSI BUILD RAMDISK - DIPERBAIKI
 # =============================================================================
 
 ramdisk() {
@@ -556,7 +563,11 @@ ramdisk() {
     quotes "Building Ramdisk"
     separator
 
-    rm -rf build/AIK/s*
+    # Clean AIK directory
+    rm -rf build/AIK/split_img
+    rm -rf build/AIK/ramdisk-new.cpio
+    rm -rf build/AIK/image-new.img
+    
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
     
@@ -569,22 +580,54 @@ ramdisk() {
     quotes "Calling Android Image Kitchen"
     pushd build/AIK > /dev/null
 
-    # Create ramdisk directories
+    # Beri permission pada script AIK
+    chmod +x ./*.sh 2>/dev/null || true
+    chmod +x ./bin/* 2>/dev/null || true
+
+    # Create ramdisk directories yang diperlukan
     create_ramdisk_directories
 
-    ./mkimg
+    quotes "Repacking boot image..."
+    ./repackimg.sh > repack.log 2>&1
+    
+    # Cek apakah image-new.img berhasil dibuat
+    if [ ! -f "image-new.img" ]; then
+        quotes "ERROR: image-new.img not created!"
+        quotes "Check AIK repack.log for details:"
+        cat repack.log
+        abort
+    fi
+    
+    # Verifikasi boot image
+    if [ -f "image-new.img" ]; then
+        BOOT_SIZE=$(stat -c%s "image-new.img")
+        quotes "Boot image created successfully: image-new.img ($BOOT_SIZE bytes)"
+    else
+        quotes "ERROR: Boot image creation failed!"
+        abort
+    fi
+    
     popd > /dev/null
 }
 
-# Fungsi untuk setup komponen boot image
+# Fungsi untuk setup komponen boot image - DIPERBAIKI
 setup_boot_image_components() {
-    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
+    # Pastikan kernel image ada
+    if [ ! -f "../../../out/arch/arm64/boot/Image" ]; then
+        quotes "ERROR: Kernel Image not found!"
+        abort
+    fi
+    
+    # Copy kernel image dengan nama yang benar
+    cp ../../../out/arch/arm64/boot/Image boot.img-zImage
+    
+    # Buat file konfigurasi boot image
     echo -e "0x10000000" > boot.img-base
-    echo -e $BOARD > boot.img-board
+    echo -e "$BOARD" > boot.img-board
     echo -e "loop.max_part=7" > boot.img-cmdline
     echo -e "sha1" > boot.img-hashtype
     echo -e "1" > boot.img-header_version
-    echo -e "AOSP" > boot.img-imgtype
+    echo -e "AOSP" > boot.img-oslevel
     echo -e "0x00008000" > boot.img-kernel_offset
     echo -e "45285376" > boot.img-origsize
     echo -e "2023-04" > boot.img-os_patch_level
@@ -594,6 +637,8 @@ setup_boot_image_components() {
     echo -e "gzip" > boot.img-ramdiskcomp
     echo -e "0xf0000000" > boot.img-second_offset
     echo -e "0x00000100" > boot.img-tags_offset
+    
+    quotes "Boot image components prepared"
 }
 
 # Fungsi untuk membuat direktori ramdisk
@@ -606,15 +651,19 @@ create_ramdisk_directories() {
 }
 
 # =============================================================================
-# FUNGSI BUILD FLASHABLE ZIP
+# FUNGSI BUILD FLASHABLE ZIP - DIPERBAIKI
 # =============================================================================
 
 build_zip() {
     # Build Zip
     separator
-    quotes "Building Zip"
-    if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        separator
+    quotes "Building Flashable Zip"
+    separator
+
+    # Pastikan boot image ada
+    if [ ! -f "build/AIK/image-new.img" ]; then
+        quotes "ERROR: Boot image not found at build/AIK/image-new.img"
+        abort
     fi
 
     pushd build > /dev/null
@@ -637,62 +686,158 @@ build_zip() {
     create_final_zip
 }
 
-# Fungsi untuk mempersiapkan struktur zip
+# Fungsi untuk mempersiapkan struktur zip - DIPERBAIKI
 prepare_zip_structure() {
     rm -rf out/$MODEL/zip
     mkdir -p export
     mkdir -p out/$MODEL/zip/module/common/
     mkdir -p out/$MODEL/zip/module/META-INF/com/google/android
     mkdir -p out/$MODEL/zip/META-INF/com/google/android
-    mv AIK/image-new.img out/$MODEL/boot-patched.img
+    
+    # Copy boot image dari AIK
+    if [ -f "AIK/image-new.img" ]; then
+        cp AIK/image-new.img out/$MODEL/boot-patched.img
+        quotes "Boot image copied: $(stat -c%s out/$MODEL/boot-patched.img) bytes"
+    else
+        quotes "ERROR: AIK/image-new.img not found!"
+        abort
+    fi
 }
 
-# Fungsi untuk menyalin file ke direktori zip
+# Fungsi untuk menyalin file ke direktori zip - DIPERBAIKI
 copy_files_to_zip() {
-    cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
-    cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
-    cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
-    cp update-binary out/$MODEL/zip/META-INF/com/google/android/
-    mv updater-script out/$MODEL/zip/META-INF/com/google/android/
+    # Copy boot image
+    if [ -f "out/$MODEL/boot-patched.img" ]; then
+        cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
+        quotes "boot.img added to zip: $(stat -c%s out/$MODEL/zip/boot.img) bytes"
+    else
+        quotes "ERROR: boot-patched.img not found!"
+        abort
+    fi
+    
+    # Copy DTB images
+    if [ -f "out/$MODEL/dtb_exynos982$SOC.img" ]; then
+        cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
+        quotes "dtb.img added to zip"
+    fi
+    
+    if [ -f "out/$MODEL/dtbo_$MODEL.img" ]; then
+        cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
+        quotes "dtbo.img added to zip"
+    fi
+    
+    # Copy update scripts
+    if [ -f "update-binary" ]; then
+        cp update-binary out/$MODEL/zip/META-INF/com/google/android/
+        quotes "update-binary added to zip"
+    fi
+    
+    if [ -f "updater-script" ]; then
+        cp updater-script out/$MODEL/zip/META-INF/com/google/android/
+        quotes "updater-script added to zip"
+    else
+        quotes "WARNING: updater-script not found!"
+    fi
 
-    mv module.prop out/$MODEL/zip/module/
-    mv system.prop out/$MODEL/zip/module/common/
-    cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
+    # Copy module files
+    if [ -f "module.prop" ]; then
+        cp module.prop out/$MODEL/zip/module/
+        quotes "module.prop added to zip"
+    fi
+    
+    if [ -f "system.prop" ]; then
+        cp system.prop out/$MODEL/zip/module/common/
+        quotes "system.prop added to zip"
+    fi
+    
+    if [ -f "module-binary" ]; then
+        cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
+        quotes "module update-binary added to zip"
+    fi
+    
     echo -e "#MAGISK" > out/$MODEL/zip/module/META-INF/com/google/android/updater-script
 }
 
 # Fungsi untuk membuat module zip
 create_module_zip() {
-    cd out/$MODEL/zip/module
-    zip -r ../module.zip .
-    rm -rf out/$MODEL/zip/module
+    pushd out/$MODEL/zip/module > /dev/null
+    zip -r ../module.zip . > /dev/null 2>&1
+    if [ $? -eq 0 ] && [ -f "../module.zip" ]; then
+        quotes "Module zip created: $(stat -c%s ../module.zip) bytes"
+        rm -rf ../module
+    else
+        quotes "ERROR: Failed to create module.zip"
+        abort
+    fi
+    popd > /dev/null
 }
 
 # Fungsi untuk update updater script dengan informasi build
 update_updater_script() {
-    sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
-    sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
-    sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    local UPDATER_SCRIPT="build/out/$MODEL/zip/META-INF/com/google/android/updater-script"
+    
+    if [ -f "$UPDATER_SCRIPT" ]; then
+        sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/g" "$UPDATER_SCRIPT"
+        sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/g" "$UPDATER_SCRIPT"
+        sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/g" "$UPDATER_SCRIPT"
+        quotes "Updater script updated with build info"
+    else
+        quotes "WARNING: updater-script not found for updating"
+    fi
 }
 
-# Fungsi untuk membuat final zip
+# Fungsi untuk membuat final zip - DIPERBAIKI
 create_final_zip() {
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
+        # Update kernel config dengan info build terbaru
         sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        
+        # Dapatkan nama kernel dari config
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
+        
+        quotes "Creating final zip: $NAME"
+        
         pushd build/out/$MODEL/zip > /dev/null
-        zip -r ../"$NAME" .
-        popd > /dev/null
-        pushd build/out > /dev/null
-        rm -rf $MODEL/zip
-        mv $MODEL/"$NAME" ../export/"$NAME"
+        
+        # List files yang akan di-zip
+        quotes "Files to be included in zip:"
+        find . -type f | while read file; do
+            quotes "  - $file ($(stat -c%s "$file") bytes)"
+        done
+        
+        # Buat zip
+        zip -r ../"$NAME" . > zip.log 2>&1
+        
+        if [ $? -eq 0 ] && [ -f "../$NAME" ]; then
+            ZIP_SIZE=$(stat -c%s "../$NAME")
+            quotes "Final zip created successfully: $NAME ($ZIP_SIZE bytes)"
+        else
+            quotes "ERROR: Failed to create final zip"
+            cat zip.log
+            abort
+        fi
+        
         popd > /dev/null
         
-        separator
-        quotes "Build Completed Successfully!"
-        quotes "Output: build/export/$NAME"
-        separator
+        # Pindah zip ke export directory
+        pushd build/out > /dev/null
+        if [ -f "$MODEL/$NAME" ]; then
+            mv "$MODEL/$NAME" ../export/"$NAME"
+            rm -rf $MODEL/zip
+            quotes "Zip moved to: build/export/$NAME"
+            
+            # Tampilkan info final
+            separator
+            quotes "BUILD COMPLETED SUCCESSFULLY!"
+            quotes "Output: build/export/$NAME"
+            quotes "Size: $(stat -c%s ../export/"$NAME") bytes"
+            separator
+        else
+            quotes "ERROR: Final zip not found after creation"
+            abort
+        fi
+        popd > /dev/null
     fi
 }
 
@@ -843,56 +988,4 @@ main() {
         quotes "Starting Build Process"
         separator
 
-        # Parse arguments dan setup environment
-        parse_arguments "$@"
-        setup_model
-        
-        # Change to script directory - HARUS DILAKUKAN SEBELUM detect_env
-        pushd $(dirname "$0") > /dev/null
-        
-        detect_env
-        toolchain
-
-        # SELALU update submodules, baik di local maupun GitHub Actions
-        submodule
-
-        # Setup KernelSU jika diaktifkan
-        if [[ "$KSU" == "y" ]]; then
-            KSU_NEXT=ksu.config
-            kernelsu
-        else
-            quotes "KernelSU is disabled"
-            KSU_NEXT=""
-        fi
-
-        # Build process
-        kernel
-        dtb
-        ramdisk
-        build_zip
-
-        # Cleanup jika running di local
-        if [[ "$LOCAL" == "y" ]] && [[ "$CLEAN" != "y" ]]; then
-            clean
-        fi
-
-        # Calculate and display build time
-        END=`date +%s`
-        let "ELAPSED=$END-$START"
-        quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
-        separator
-        
-        # Kembali ke direktori awal
-        popd > /dev/null
-        
-    ) 2>&1 | tee -a ./build.log
-}
-
-# =============================================================================
-# EXECUTE MAIN FUNCTION
-# =============================================================================
-
-# Cek jika script di-run langsung
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+        # Parse
