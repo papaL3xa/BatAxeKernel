@@ -159,8 +159,8 @@ detect_env() {
     if test -d "build/AIK"; then
         quotes "Android Image Kitchen Directory Found!"
     else
-        quotes "Adding Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null
+        quotes "Add Android Image Kitchen as Submodule"
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
@@ -178,29 +178,29 @@ detect_env() {
 
 # Fungsi untuk setup ramdisk binary
 setup_ramdisk() {
-    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/ramdisk/init"; then
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
         quotes "Ramdisk Binary Found!"
     else
         if ! test -d "build/AIK/ramdisk"; then
             mkdir -p build/AIK/ramdisk
         fi
         
-        if ! test -f "build/AIK/ramdisk/dpolicy"; then
+        if ! test -f "build/AIK/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
 
-        if ! test -f "build/AIK/ramdisk/init"; then
+        if ! test -f "build/AIK/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/init
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
+    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
-        rm -rf build/AIK/ramdisk/fstab.exynos982*
+        rm -rf build/AIK/ramdisk/f*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
         check "Fstab for Exynos 982$SOC"
     fi
@@ -212,11 +212,11 @@ setup_dtb_tools() {
         quotes "DTB Build Script Found!"
     else
         quotes "Getting DTB Build Script"
-        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
+        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mk*
         check "DTB Build Script"
     fi
 
-    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
+    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
         quotes "DTB Config Directory Found!"
     else
         if ! test -d "build/dtconfigs"; then
@@ -230,12 +230,12 @@ setup_dtb_tools() {
 
 # Fungsi untuk download DTB configs
 download_dtb_configs() {
-    if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
+    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
         quotes "Getting DTB Config for Exynos 982$SOC"
         curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
     fi
 
-    if ! test -f "build/dtconfigs/$MODEL.cfg"; then
+    if ! test -f "build/dtconfig/$MODEL.cfg"; then
         quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
         if [[ "$MODEL" == "d1xks" ]]; then
@@ -259,26 +259,19 @@ setup_module_files() {
         check "Module Binary"
     fi
 
-    if ! test -f "build/module.prop"; then
-        quotes "Getting Module Props"
-        curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" 
-        mv *.prop build/ 2>/dev/null || true
-        check "Module Props"
-    fi
+    quotes "Getting Module Props"
+    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.p* build
+    check "Module Props"
 
     if ! test -f "build/update-binary"; then
         quotes "Getting Kernel Zip Binary"
         curl -LOSs "${REPO_URL}toolchains/update-binary"
-        mv update-binary build/ 2>/dev/null || true
         check "Kernel Zip Binary"
     fi
 
-    if ! test -f "build/updater-script"; then
-        quotes "Getting Kernel Zip Script"
-        curl -LOSs "${BUILD_URL}updater-script"
-        mv updater-script build/ 2>/dev/null || true
-        check "Kernel Zip Script"
-    fi
+    quotes "Getting Kernel Zip Script"
+    curl -LOSs "${BUILD_URL}updater-script" && mv up* build
+    check "Kernel Zip Script"
 }
 
 # =============================================================================
@@ -554,7 +547,7 @@ dtb() {
 }
 
 # =============================================================================
-# FUNGSI BUILD RAMDISK - DIPERBAIKI
+# FUNGSI BUILD RAMDISK
 # =============================================================================
 
 ramdisk() {
@@ -563,11 +556,7 @@ ramdisk() {
     quotes "Building Ramdisk"
     separator
 
-    # Clean AIK directory
-    rm -rf build/AIK/split_img
-    rm -rf build/AIK/ramdisk-new.cpio
-    rm -rf build/AIK/image-new.img
-    
+    rm -rf build/AIK/s*
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
     
@@ -580,54 +569,22 @@ ramdisk() {
     quotes "Calling Android Image Kitchen"
     pushd build/AIK > /dev/null
 
-    # Beri permission pada script AIK
-    chmod +x ./*.sh 2>/dev/null || true
-    chmod +x ./bin/* 2>/dev/null || true
-
-    # Create ramdisk directories yang diperlukan
+    # Create ramdisk directories
     create_ramdisk_directories
 
-    quotes "Repacking boot image..."
-    ./repackimg.sh > repack.log 2>&1
-    
-    # Cek apakah image-new.img berhasil dibuat
-    if [ ! -f "image-new.img" ]; then
-        quotes "ERROR: image-new.img not created!"
-        quotes "Check AIK repack.log for details:"
-        cat repack.log
-        abort
-    fi
-    
-    # Verifikasi boot image
-    if [ -f "image-new.img" ]; then
-        BOOT_SIZE=$(stat -c%s "image-new.img")
-        quotes "Boot image created successfully: image-new.img ($BOOT_SIZE bytes)"
-    else
-        quotes "ERROR: Boot image creation failed!"
-        abort
-    fi
-    
+    ./mkimg
     popd > /dev/null
 }
 
-# Fungsi untuk setup komponen boot image - DIPERBAIKI
+# Fungsi untuk setup komponen boot image
 setup_boot_image_components() {
-    # Pastikan kernel image ada
-    if [ ! -f "../../../out/arch/arm64/boot/Image" ]; then
-        quotes "ERROR: Kernel Image not found!"
-        abort
-    fi
-    
-    # Copy kernel image dengan nama yang benar
-    cp ../../../out/arch/arm64/boot/Image boot.img-zImage
-    
-    # Buat file konfigurasi boot image
+    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
-    echo -e "$BOARD" > boot.img-board
+    echo -e $BOARD > boot.img-board
     echo -e "loop.max_part=7" > boot.img-cmdline
     echo -e "sha1" > boot.img-hashtype
     echo -e "1" > boot.img-header_version
-    echo -e "AOSP" > boot.img-oslevel
+    echo -e "AOSP" > boot.img-imgtype
     echo -e "0x00008000" > boot.img-kernel_offset
     echo -e "45285376" > boot.img-origsize
     echo -e "2023-04" > boot.img-os_patch_level
@@ -637,8 +594,6 @@ setup_boot_image_components() {
     echo -e "gzip" > boot.img-ramdiskcomp
     echo -e "0xf0000000" > boot.img-second_offset
     echo -e "0x00000100" > boot.img-tags_offset
-    
-    quotes "Boot image components prepared"
 }
 
 # Fungsi untuk membuat direktori ramdisk
@@ -651,19 +606,15 @@ create_ramdisk_directories() {
 }
 
 # =============================================================================
-# FUNGSI BUILD FLASHABLE ZIP - DIPERBAIKI
+# FUNGSI BUILD FLASHABLE ZIP
 # =============================================================================
 
 build_zip() {
     # Build Zip
     separator
-    quotes "Building Flashable Zip"
-    separator
-
-    # Pastikan boot image ada
-    if [ ! -f "build/AIK/image-new.img" ]; then
-        quotes "ERROR: Boot image not found at build/AIK/image-new.img"
-        abort
+    quotes "Building Zip"
+    if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
+        separator
     fi
 
     pushd build > /dev/null
@@ -686,157 +637,56 @@ build_zip() {
     create_final_zip
 }
 
-# Fungsi untuk mempersiapkan struktur zip - DIPERBAIKI
+# Fungsi untuk mempersiapkan struktur zip
 prepare_zip_structure() {
     rm -rf out/$MODEL/zip
     mkdir -p export
     mkdir -p out/$MODEL/zip/module/common/
     mkdir -p out/$MODEL/zip/module/META-INF/com/google/android
     mkdir -p out/$MODEL/zip/META-INF/com/google/android
-    
-    # Copy boot image dari AIK
-    if [ -f "AIK/image-new.img" ]; then
-        cp AIK/image-new.img out/$MODEL/boot-patched.img
-        quotes "Boot image copied: $(stat -c%s out/$MODEL/boot-patched.img) bytes"
-    else
-        quotes "ERROR: AIK/image-new.img not found!"
-        abort
-    fi
+    mv AIK/image-new.img out/$MODEL/boot-patched.img
 }
 
-# Fungsi untuk menyalin file ke direktori zip - DIPERBAIKI
+# Fungsi untuk menyalin file ke direktori zip
 copy_files_to_zip() {
-    # Copy boot image
-    if [ -f "out/$MODEL/boot-patched.img" ]; then
-        cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
-        quotes "boot.img added to zip: $(stat -c%s out/$MODEL/zip/boot.img) bytes"
-    else
-        quotes "ERROR: boot-patched.img not found!"
-        abort
-    fi
-    
-    # Copy DTB images
-    if [ -f "out/$MODEL/dtb_exynos982$SOC.img" ]; then
-        cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
-        quotes "dtb.img added to zip"
-    fi
-    
-    if [ -f "out/$MODEL/dtbo_$MODEL.img" ]; then
-        cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
-        quotes "dtbo.img added to zip"
-    fi
-    
-    # Copy update scripts
-    if [ -f "update-binary" ]; then
-        cp update-binary out/$MODEL/zip/META-INF/com/google/android/
-        quotes "update-binary added to zip"
-    fi
-    
-    if [ -f "updater-script" ]; then
-        cp updater-script out/$MODEL/zip/META-INF/com/google/android/
-        quotes "updater-script added to zip"
-    else
-        quotes "WARNING: updater-script not found!"
-    fi
+    cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
+    cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
+    cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
+    cp update-binary out/$MODEL/zip/META-INF/com/google/android/
+    mv updater-script out/$MODEL/zip/META-INF/com/google/android/
 
-    # Copy module files
-    if [ -f "module.prop" ]; then
-        cp module.prop out/$MODEL/zip/module/
-        quotes "module.prop added to zip"
-    fi
-    
-    if [ -f "system.prop" ]; then
-        cp system.prop out/$MODEL/zip/module/common/
-        quotes "system.prop added to zip"
-    fi
-    
-    if [ -f "module-binary" ]; then
-        cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
-        quotes "module update-binary added to zip"
-    fi
-    
+    mv module.prop out/$MODEL/zip/module/
+    mv system.prop out/$MODEL/zip/module/common/
+    cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
     echo -e "#MAGISK" > out/$MODEL/zip/module/META-INF/com/google/android/updater-script
 }
 
 # Fungsi untuk membuat module zip
 create_module_zip() {
-    pushd out/$MODEL/zip/module > /dev/null
-    zip -r ../module.zip . > /dev/null 2>&1
-    if [ $? -eq 0 ] && [ -f "../module.zip" ]; then
-        quotes "Module zip created: $(stat -c%s ../module.zip) bytes"
-        rm -rf ../module
-    else
-        quotes "ERROR: Failed to create module.zip"
-        abort
-    fi
-    popd > /dev/null
+    cd out/$MODEL/zip/module
+    zip -r ../module.zip .
+    rm -rf out/$MODEL/zip/module
 }
 
 # Fungsi untuk update updater script dengan informasi build
 update_updater_script() {
-    local UPDATER_SCRIPT="build/out/$MODEL/zip/META-INF/com/google/android/updater-script"
-    
-    if [ -f "$UPDATER_SCRIPT" ]; then
-        sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/g" "$UPDATER_SCRIPT"
-        sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/g" "$UPDATER_SCRIPT"
-        sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/g" "$UPDATER_SCRIPT"
-        quotes "Updater script updated with build info"
-    else
-        quotes "WARNING: updater-script not found for updating"
-    fi
+    sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
 }
 
-# Fungsi untuk membuat final zip - DIPERBAIKI
+# Fungsi untuk membuat final zip
 create_final_zip() {
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        # Update kernel config dengan info build terbaru
         sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
-        
-        # Dapatkan nama kernel dari config
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
-        
-        quotes "Creating final zip: $NAME"
-        
         pushd build/out/$MODEL/zip > /dev/null
-        
-        # List files yang akan di-zip
-        quotes "Files to be included in zip:"
-        find . -type f | while read file; do
-            quotes "  - $file ($(stat -c%s "$file") bytes)"
-        done
-        
-        # Buat zip
-        zip -r ../"$NAME" . > zip.log 2>&1
-        
-        if [ $? -eq 0 ] && [ -f "../$NAME" ]; then
-            ZIP_SIZE=$(stat -c%s "../$NAME")
-            quotes "Final zip created successfully: $NAME ($ZIP_SIZE bytes)"
-        else
-            quotes "ERROR: Failed to create final zip"
-            cat zip.log
-            abort
-        fi
-        
+        zip -r ../"$NAME" .
         popd > /dev/null
-        
-        # Pindah zip ke export directory
         pushd build/out > /dev/null
-        if [ -f "$MODEL/$NAME" ]; then
-            mv "$MODEL/$NAME" ../export/"$NAME"
-            rm -rf $MODEL/zip
-            quotes "Zip moved to: build/export/$NAME"
-            
-            # Tampilkan info final
-            separator
-            quotes "BUILD COMPLETED SUCCESSFULLY!"
-            quotes "Output: build/export/$NAME"
-            quotes "Size: $(stat -c%s ../export/"$NAME") bytes"
-            separator
-        else
-            quotes "ERROR: Final zip not found after creation"
-            abort
-        fi
+        rm -rf $MODEL/zip
+        mv $MODEL/"$NAME" ../export/"$NAME"
         popd > /dev/null
     fi
 }
@@ -851,19 +701,9 @@ Usage: $(basename "$0") [options]
 Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -v, --ver [value]      Kernel Version Name (default: Unofficial)
-    -r, --rel [y/N]        Release Type for GitHub Actions (y: Release - n: CI)
+    -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
-
-Supported Models:
-    beyond0lte, beyond1lte, beyond2lte, beyondx (S10 series)
-    d1, d1xks, d2s, d2x (Note10 series)
-
-Examples:
-    ./build.sh --model d2s --ksu y
-    ./build.sh --model d2s --llvm 17 --clean y
-    ./build.sh --model beyond2lte --ksu n --ver "Stable-v1.0"
+    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -878,7 +718,7 @@ parse_arguments() {
                 shift 2
                 ;;
             --ksu|-k)
-                KSU="$2"
+                KSU_OPTION="$2"
                 shift 2
                 ;;
             --ver|-v)
@@ -886,12 +726,12 @@ parse_arguments() {
                 shift 2
                 ;;
             --rel|-r)
-                RELEASE="$2"
+                RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
                 shift 2
                 ;;
             --help|-h)
                 usage
-                exit 0
+                exit 1
                 ;;
             --clean|-c)
                 CLEAN="$2"
@@ -902,12 +742,12 @@ parse_arguments() {
                     LLVM="$2"
                     shift 2
                 else
-                    LLVM=10032024
+                    LLVM=21
                     shift
                 fi
                 
-                # Check if LLVM version is antara 12-21 (Clang) atau string (Neutron)
-                if [[ "$LLVM" =~ ^[0-9]+$ ]] && [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
+                # Check if LLVM version is between 12-21
+                if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
                     USE_NEUTRON=false
                     echo "-- Using Clang $LLVM"
                 else
@@ -917,7 +757,6 @@ parse_arguments() {
                 fi
                 ;;
             *)
-                echo "Unknown option: $1"
                 usage
                 exit 1
                 ;;
@@ -966,9 +805,8 @@ setup_model() {
         BOARD=SRPSC14C007KU
     ;;
     *)
-        echo "Error: Unknown model '$MODEL'"
         usage
-        exit 1
+        exit
     esac
 }
 
@@ -984,8 +822,51 @@ main() {
         START=`date +%s`
 
         separator
-        quotes "BatAxe Kernel Build Script"
-        quotes "Starting Build Process"
-        separator
+        quotes "Preparing Build Environment"
 
-        # Parse
+        # Parse arguments dan setup environment
+        parse_arguments "$@"
+        setup_model
+        detect_env
+        toolchain
+        
+        # Change to script directory
+        pushd $(dirname "$0") > /dev/null
+
+        # Setup submodules jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            submodule
+        fi
+
+        if [[ "$KSU" == "y" ]]; then
+            quotes "KernelSU enabled - assuming manual submodule setup"
+            KSU_NEXT=ksu.config
+            # kernelsu  # Dikomentari karena submodule sudah diatur manual
+        fi
+
+        # Build process
+        kernel
+        dtb
+        ramdisk
+        build_zip
+
+        # Cleanup jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            clean
+            separator
+        fi
+
+        # Calculate and display build time
+        END=`date +%s`
+        let "ELAPSED=$END-$START"
+        quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
+        separator
+        
+    ) 2>&1 | tee -a ./build.log
+}
+
+# =============================================================================
+# EXECUTE MAIN FUNCTION
+# =============================================================================
+
+main "$@"
