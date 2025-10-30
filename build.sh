@@ -100,39 +100,13 @@ update_submodules() {
     fi
 }
 
-# Fungsi untuk memastikan semua submodules ter-initialize dengan benar
-init_submodules() {
+# Fungsi untuk update submodules (versi asli dengan perbaikan)
+submodule() {
     separator
-    quotes "Initializing and Updating all Submodules"
-    
-    # Initialize dan update semua submodules
-    git submodule init
-    git submodule update --force --recursive --remote
-    check "Submodules Initialization"
-    
-    # Cek dan update KernelSU-Next khususnya
-    update_kernelsu_next
-}
+    quotes "Fetch all Submodules Update"
 
-# Fungsi khusus untuk update KernelSU-Next
-update_kernelsu_next() {
-    separator
-    quotes "Checking KernelSU Next Directory"
-    
-    # Cek apakah drivers/kernelsu sudah ada
-    if test -d "drivers/kernelsu"; then
-        quotes "KernelSU Next Directory Found - Updating to Latest"
-        cd drivers/kernelsu
-        git fetch --all
-        git reset --hard origin/main  # atau branch yang sesuai
-        git pull origin main
-        cd ../..
-        check "KernelSU Next Update"
-    else
-        quotes "KernelSU Next Directory Not Found! Initializing..."
-        git submodule add https://github.com/tiann/KernelSU drivers/kernelsu
-        check "KernelSU Next Initialization"
-    fi
+    git submodule update --remote --force --recursive --init > /dev/null
+    check "Submodules"
 }
 
 # =============================================================================
@@ -476,10 +450,22 @@ setup_clang_environment() {
 
 kernelsu() {
     separator
-    quotes "Setting up KernelSU Next"
+    quotes "Checking KernelSU Next Directory"
     
-    # Pastikan KernelSU Next ter-update
-    update_kernelsu_next
+    # Cek apakah drivers/kernelsu sudah ada
+    if test -d "drivers/kernelsu"; then
+        quotes "KernelSU Next Directory Found - Ensuring Latest Version"
+        # Update KernelSU ke versi terbaru
+        cd drivers/kernelsu
+        git fetch origin
+        git checkout main  # atau branch yang sesuai
+        git pull origin main
+        cd ../..
+        check "KernelSU Next Update"
+    else
+        quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
+        abort
+    fi
     
     check "KernelSU Setup"
 }
@@ -567,7 +553,7 @@ ramdisk() {
     quotes "Building Ramdisk"
     separator
 
-    rm -rf build/AIK/split_img
+    rm -rf build/AIK/s*
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
     
@@ -583,28 +569,28 @@ ramdisk() {
     # Create ramdisk directories
     create_ramdisk_directories
 
-    ./repackimg.sh
+    ./mkimg
     popd > /dev/null
 }
 
 # Fungsi untuk setup komponen boot image
 setup_boot_image_components() {
-    mv ../../../out/arch/arm64/boot/Image kernel
-    echo -e "0x10000000" > base
-    echo -e $BOARD > board
-    echo -e "loop.max_part=7" > cmdline
-    echo -e "sha1" > hashtype
-    echo -e "1" > header_version
-    echo -e "AOSP" > imgtype
-    echo -e "0x00008000" > kernel_offset
-    echo -e "45285376" > origsize
-    echo -e "2023-04" > os_patch_level
-    echo -e "12.0.0" > os_version
-    echo -e "2048" > pagesize
-    echo -e "0x01000000" > ramdisk_offset
-    echo -e "gzip" > ramdiskcomp
-    echo -e "0xf0000000" > second_offset
-    echo -e "0x00000100" > tags_offset
+    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
+    echo -e "0x10000000" > boot.img-base
+    echo -e $BOARD > boot.img-board
+    echo -e "loop.max_part=7" > boot.img-cmdline
+    echo -e "sha1" > boot.img-hashtype
+    echo -e "1" > boot.img-header_version
+    echo -e "AOSP" > boot.img-imgtype
+    echo -e "0x00008000" > boot.img-kernel_offset
+    echo -e "45285376" > boot.img-origsize
+    echo -e "2023-04" > boot.img-os_patch_level
+    echo -e "12.0.0" > boot.img-os_version
+    echo -e "2048" > boot.img-pagesize
+    echo -e "0x01000000" > boot.img-ramdisk_offset
+    echo -e "gzip" > boot.img-ramdiskcomp
+    echo -e "0xf0000000" > boot.img-second_offset
+    echo -e "0x00000100" > boot.img-tags_offset
 }
 
 # Fungsi untuk membuat direktori ramdisk
@@ -715,14 +701,12 @@ Options:
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
     -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
-    -u, --update           Force update all submodules including KernelSU-Next
 EOF
 }
 
 # Fungsi untuk parsing argumen command line
 parse_arguments() {
     USE_NEUTRON=false
-    FORCE_UPDATE=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -768,10 +752,6 @@ parse_arguments() {
                     NEUTRON="${LLVM:-10032024}"
                     echo "-- Using Neutron Clang ($NEUTRON)"
                 fi
-                ;;
-            --update|-u)
-                FORCE_UPDATE=true
-                shift
                 ;;
             *)
                 usage
@@ -844,25 +824,21 @@ main() {
         # Parse arguments dan setup environment
         parse_arguments "$@"
         setup_model
+        detect_env
+        toolchain
         
         # Change to script directory
         pushd $(dirname "$0") > /dev/null
 
-        # Initialize dan update semua submodules
-        init_submodules
-        
-        # Force update jika diminta
-        if [[ "$FORCE_UPDATE" == "true" ]]; then
-            update_submodules
+        # Setup submodules dengan update ke versi terbaru
+        if [[ "$LOCAL" == "y" ]]; then
+            submodule
         fi
-        
-        detect_env
-        toolchain
 
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled"
+            quotes "KernelSU enabled - updating to latest version"
             KSU_NEXT=ksu.config
-            kernelsu
+            kernelsu  # Pastikan KernelSU selalu ter-update
         fi
 
         # Build process
