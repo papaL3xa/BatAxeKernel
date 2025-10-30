@@ -58,6 +58,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # TAMBAHKAN INI untuk mengundang submodules
+          submodules: recursive
+
+      - name: 🔄 Initialize and Update Submodules
+        run: |
+          git submodule update --init --recursive --depth=1
 
       - name: ⏰ Set Time Zone
         run: |
@@ -73,10 +79,7 @@ jobs:
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA" >> $GITHUB_ENV
           echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
-
-      - name: ⭐Checkout repository with submodules
-        uses: actions/checkout@v4
-                          
+         
       - name: ⚙️ setting permission
         run: chmod +x build.sh
 
