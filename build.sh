@@ -83,8 +83,14 @@ submodule() {
     separator
     quotes "Fetch all Submodules Update"
 
-    git submodule init && git submodule update --remote
-    check "Submodules"
+    # Cek apakah ada submodule yang belum di-init
+    if [ -f .gitmodules ] && [ -n "$(git submodule status | grep '^-')" ]; then
+        git submodule init
+        git submodule update --recursive --remote
+        check "Submodules"
+    else
+        quotes "Submodules already initialized or no submodules configured"
+    fi
 }
 
 # Fungsi untuk mendeteksi dan setup environment build
@@ -431,7 +437,20 @@ kernelsu() {
         quotes "KernelSU Next Directory Found!"
     else
         quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
-        abort
+        quotes "Trying to initialize submodules..."
+        
+        # Coba initialize submodules
+        git submodule init
+        git submodule update --recursive --remote
+        
+        # Cek lagi setelah update
+        if test -d "drivers/kernelsu"; then
+            quotes "KernelSU Next Directory successfully initialized!"
+        else
+            quotes "ERROR: KernelSU Next still not found after submodule update!"
+            quotes "Please check if KernelSU submodule is properly configured in .gitmodules"
+            abort
+        fi
     fi
     
     check "KernelSU Setup"
@@ -668,7 +687,7 @@ Options:
     -h, --help             List all Build Script Command
     -r, --rel [y/N]        Release kernel (y:Release Version N: CI Version)
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -804,9 +823,9 @@ main() {
         fi
 
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled - assuming manual submodule setup"
+            quotes "KernelSU enabled - checking submodule..."
             KSU_NEXT=ksu.config
-            # kernelsu  # Dikomentari karena submodule sudah diatur manual
+            kernelsu  # Panggil fungsi kernelsu untuk memastikan submodule tersedia
         fi
 
         # Build process
