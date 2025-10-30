@@ -20,6 +20,14 @@ on:
         options:
           - 'y'
           - 'n'
+      release:
+        description: 'Release this Kernal ? (y: Release - n: CI)'
+        required: true
+        default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       llvm:
         description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
@@ -68,10 +76,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 🔄 Initialize and Update Submodules
-        run: |
-          git submodule update --init --recursive --depth=1
-
       - name: ⏰ Set Time Zone
         run: |
           sudo timedatectl set-timezone Asia/Singapore
@@ -92,7 +96,7 @@ jobs:
         
       - name: 🏇🏻 Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r y
+            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r ${{ github.event.inputs.release }}
 
       - name: 🧩 Upload Kernel
         uses: actions/upload-artifact@v4

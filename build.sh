@@ -78,12 +78,37 @@ check() {
 # FUNGSI SETUP ENVIRONMENT
 # =============================================================================
 
-# Fungsi untuk update submodules
+# Fungsi untuk update submodules dengan lebih robust
 submodule() {
     separator
-    quotes "Fetch all Submodules Update"
-
-    git submodule init && git submodule update --remote
+    quotes "Updating all Submodules"
+    
+    # Inisialisasi submodule jika belum
+    if [ ! -f .gitmodules ]; then
+        quotes "No .gitmodules file found"
+        return 0
+    fi
+    
+    # Cek status submodule
+    quotes "Checking submodule status"
+    git submodule status
+    
+    # Update submodule dengan approach yang lebih komprehensif
+    quotes "Initializing submodules"
+    git submodule init
+    
+    quotes "Updating submodules to latest remote commits"
+    git submodule update --remote --recursive --force
+    
+    quotes "Synchronizing submodules"
+    git submodule sync
+    
+    # Untuk KernelSU, pastikan submodule sudah ter-init
+    if [[ "$KSU" == "y" ]] && [ ! -d "drivers/kernelsu" ]; then
+        quotes "Initializing KernelSU submodule specifically"
+        git submodule update --init --recursive drivers/kernelsu
+    fi
+    
     check "Submodules"
 }
 
@@ -134,7 +159,7 @@ detect_env() {
     if test -d "build/AIK"; then
         quotes "Android Image Kitchen Directory Found!"
     else
-        quotes "Add Android Image Kitchen as Submodule"
+        quotes "Adding Android Image Kitchen as Submodule"
         git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
@@ -153,27 +178,27 @@ detect_env() {
 
 # Fungsi untuk setup ramdisk binary
 setup_ramdisk() {
-    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/ramdisk/init"; then
         quotes "Ramdisk Binary Found!"
     else
         if ! test -d "build/AIK/ramdisk"; then
             mkdir -p build/AIK/ramdisk
         fi
         
-        if ! test -f "build/AIK/dpolicy"; then
+        if ! test -f "build/AIK/ramdisk/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
 
-        if ! test -f "build/AIK/init"; then
+        if ! test -f "build/AIK/ramdisk/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/init
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
+    if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
         rm -rf build/AIK/ramdisk/f*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
@@ -187,11 +212,11 @@ setup_dtb_tools() {
         quotes "DTB Build Script Found!"
     else
         quotes "Getting DTB Build Script"
-        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mk*
+        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
         check "DTB Build Script"
     fi
 
-    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
+    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
         quotes "DTB Config Directory Found!"
     else
         if ! test -d "build/dtconfigs"; then
@@ -205,12 +230,12 @@ setup_dtb_tools() {
 
 # Fungsi untuk download DTB configs
 download_dtb_configs() {
-    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
+    if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
         quotes "Getting DTB Config for Exynos 982$SOC"
         curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
     fi
 
-    if ! test -f "build/dtconfig/$MODEL.cfg"; then
+    if ! test -f "build/dtconfigs/$MODEL.cfg"; then
         quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
         if [[ "$MODEL" == "d1xks" ]]; then
@@ -235,7 +260,7 @@ setup_module_files() {
     fi
 
     quotes "Getting Module Props"
-    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.p* build
+    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.prop build/
     check "Module Props"
 
     if ! test -f "build/update-binary"; then
@@ -245,7 +270,7 @@ setup_module_files() {
     fi
 
     quotes "Getting Kernel Zip Script"
-    curl -LOSs "${BUILD_URL}updater-script" && mv up* build
+    curl -LOSs "${BUILD_URL}updater-script" && mv updater-script build/
     check "Kernel Zip Script"
 }
 
@@ -429,9 +454,20 @@ kernelsu() {
     # Cek apakah drivers/kernelsu sudah ada
     if test -d "drivers/kernelsu"; then
         quotes "KernelSU Next Directory Found!"
+        
+        # Pastikan submodule KernelSU sudah ter-update
+        quotes "Ensuring KernelSU submodule is updated"
+        git submodule update --init --recursive drivers/kernelsu
     else
-        quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
-        abort
+        quotes "KernelSU Next Directory Not Found! Initializing..."
+        git submodule update --init --recursive drivers/kernelsu
+        
+        if test -d "drivers/kernelsu"; then
+            quotes "KernelSU Next Directory successfully initialized!"
+        else
+            quotes "Failed to initialize KernelSU submodule!"
+            abort
+        fi
     fi
     
     check "KernelSU Setup"
@@ -520,7 +556,7 @@ ramdisk() {
     quotes "Building Ramdisk"
     separator
 
-    rm -rf build/AIK/s*
+    rm -rf build/AIK/split_img
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
     
@@ -536,19 +572,19 @@ ramdisk() {
     # Create ramdisk directories
     create_ramdisk_directories
 
-    ./mkimg
+    ./repackimg.sh
     popd > /dev/null
 }
 
 # Fungsi untuk setup komponen boot image
 setup_boot_image_components() {
-    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
+    mv ../../../out/arch/arm64/boot/Image boot.img-zImage
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
     echo -e "loop.max_part=7" > boot.img-cmdline
     echo -e "sha1" > boot.img-hashtype
     echo -e "1" > boot.img-header_version
-    echo -e "AOSP" > boot.img-imgtype
+    echo -e "AOSP" > boot.img-oslevel
     echo -e "0x00008000" > boot.img-kernel_offset
     echo -e "45285376" > boot.img-origsize
     echo -e "2023-04" > boot.img-os_patch_level
@@ -628,8 +664,9 @@ copy_files_to_zip() {
 # Fungsi untuk membuat module zip
 create_module_zip() {
     cd out/$MODEL/zip/module
-    zip -r ../module.zip .
-    rm -rf out/$MODEL/zip/module
+    zip -r ../module.zip . > /dev/null 2>&1
+    rm -rf ../module
+    cd ../../..
 }
 
 # Fungsi untuk update updater script dengan informasi build
@@ -646,12 +683,17 @@ create_final_zip() {
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null
-        zip -r ../"$NAME" .
+        zip -r ../"$NAME" . > /dev/null 2>&1
         popd > /dev/null
         pushd build/out > /dev/null
         rm -rf $MODEL/zip
         mv $MODEL/"$NAME" ../export/"$NAME"
         popd > /dev/null
+        
+        separator
+        quotes "Build Completed Successfully!"
+        quotes "Output: build/export/$NAME"
+        separator
     fi
 }
 
@@ -665,9 +707,19 @@ Usage: $(basename "$0") [options]
 Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -h, --help             List all Build Script Command
+    -v, --ver [value]      Kernel Version Name (default: Unofficial)
+    -r, --rel [y/N]        Release Type for GitHub Actions (y: Release - n: CI)
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
+
+Supported Models:
+    beyond0lte, beyond1lte, beyond2lte, beyondx (S10 series)
+    d1, d1xks, d2s, d2x (Note10 series)
+
+Examples:
+    ./build.sh --model d2s --ksu y
+    ./build.sh --model d2s --llvm 17 --clean y
+    ./build.sh --model beyond2lte --ksu n --ver "Stable-v1.0"
 EOF
 }
 
@@ -682,7 +734,7 @@ parse_arguments() {
                 shift 2
                 ;;
             --ksu|-k)
-                KSU_OPTION="$2"
+                KSU="$2"
                 shift 2
                 ;;
             --ver|-v)
@@ -690,12 +742,12 @@ parse_arguments() {
                 shift 2
                 ;;
             --rel|-r)
-                RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
+                RELEASE="$2"
                 shift 2
                 ;;
             --help|-h)
                 usage
-                exit 1
+                exit 0
                 ;;
             --clean|-c)
                 CLEAN="$2"
@@ -706,12 +758,12 @@ parse_arguments() {
                     LLVM="$2"
                     shift 2
                 else
-                    LLVM=21
+                    LLVM=10032024
                     shift
                 fi
                 
-                # Check if LLVM version is between 12-21
-                if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
+                # Check if LLVM version is antara 12-21 (Clang) atau string (Neutron)
+                if [[ "$LLVM" =~ ^[0-9]+$ ]] && [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
                     USE_NEUTRON=false
                     echo "-- Using Clang $LLVM"
                 else
@@ -721,6 +773,7 @@ parse_arguments() {
                 fi
                 ;;
             *)
+                echo "Unknown option: $1"
                 usage
                 exit 1
                 ;;
@@ -769,8 +822,9 @@ setup_model() {
         BOARD=SRPSC14C007KU
     ;;
     *)
+        echo "Error: Unknown model '$MODEL'"
         usage
-        exit
+        exit 1
     esac
 }
 
@@ -786,26 +840,30 @@ main() {
         START=`date +%s`
 
         separator
-        quotes "Preparing Build Environment"
+        quotes "BatAxe Kernel Build Script"
+        quotes "Starting Build Process"
+        separator
 
         # Parse arguments dan setup environment
         parse_arguments "$@"
         setup_model
+        
+        # Change to script directory - HARUS DILAKUKAN SEBELUM detect_env
+        pushd $(dirname "$0") > /dev/null
+        
         detect_env
         toolchain
-        
-        # Change to script directory
-        pushd $(dirname "$0") > /dev/null
 
-        # Setup submodules jika running di local
-        if [[ "$LOCAL" == "y" ]]; then
-            submodule
-        fi
+        # SELALU update submodules, baik di local maupun GitHub Actions
+        submodule
 
+        # Setup KernelSU jika diaktifkan
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled - assuming manual submodule setup"
             KSU_NEXT=ksu.config
-            # kernelsu  # Dikomentari karena submodule sudah diatur manual
+            kernelsu
+        else
+            quotes "KernelSU is disabled"
+            KSU_NEXT=""
         fi
 
         # Build process
@@ -815,9 +873,8 @@ main() {
         build_zip
 
         # Cleanup jika running di local
-        if [[ "$LOCAL" == "y" ]]; then
+        if [[ "$LOCAL" == "y" ]] && [[ "$CLEAN" != "y" ]]; then
             clean
-            separator
         fi
 
         # Calculate and display build time
@@ -826,6 +883,9 @@ main() {
         quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
         separator
         
+        # Kembali ke direktori awal
+        popd > /dev/null
+        
     ) 2>&1 | tee -a ./build.log
 }
 
@@ -833,4 +893,7 @@ main() {
 # EXECUTE MAIN FUNCTION
 # =============================================================================
 
-main "$@"
+# Cek jika script di-run langsung
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

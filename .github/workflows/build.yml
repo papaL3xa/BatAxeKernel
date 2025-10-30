@@ -59,10 +59,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 🔄 Initialize and Update Submodules
-        run: |
-          git submodule update --init --recursive --depth=1
-
       - name: ⏰ Set Time Zone
         run: |
           sudo timedatectl set-timezone Asia/Singapore
