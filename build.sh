@@ -75,29 +75,114 @@ check() {
 }
 
 # =============================================================================
+# FUNGSI FIX PERMISSIONS DAN VERIFIKASI
+# =============================================================================
+
+# Fungsi untuk fix submodule permissions
+fix_submodule_permissions() {
+    separator
+    quotes "Fixing submodule permissions..."
+    
+    find . -name ".gitmodules" -exec chmod 644 {} \;
+    find . -name ".git" -type d -exec chmod 755 {} \;
+    find .git/modules -type d -exec chmod 755 {} \; 2>/dev/null || true
+    
+    quotes "Permissions fixed!"
+}
+
+# Fungsi untuk verifikasi submodule
+verify_submodules() {
+    separator
+    quotes "Verifying submodules..."
+    
+    local submodules=$(git submodule status | awk '{print $2}')
+    local all_ok=true
+    
+    for submodule in $submodules; do
+        if [ ! -d "$submodule" ] || [ -z "$(ls -A $submodule)" ]; then
+            quotes "ERROR: Submodule $submodule is missing or empty!"
+            all_ok=false
+        else
+            quotes "✓ $submodule: OK"
+        fi
+    done
+    
+    if [ "$all_ok" = true ]; then
+        quotes "All submodules verified successfully!"
+        return 0
+    else
+        quotes "Some submodules have issues!"
+        return 1
+    fi
+}
+
+# Fungsi alternatif untuk update manual
+update_submodules_manual() {
+    separator
+    quotes "Trying manual submodule update..."
+    
+    # Get list of submodules
+    local submodules=$(git config --file .gitmodules --get-regexp path | awk '{print $2}')
+    
+    for submodule in $submodules; do
+        if [ -d "$submodule" ]; then
+            quotes "Updating $submodule..."
+            cd "$submodule"
+            git fetch --all
+            git reset --hard HEAD
+            git checkout main 2>/dev/null || git checkout master 2>/dev/null || git checkout $(git branch -r | grep -v '\->' | awk '{print $1}' | head -1 | sed 's#origin/##')
+            git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || git pull origin $(git branch -r | grep -v '\->' | awk '{print $1}' | head -1 | sed 's#origin/##')
+            cd ..
+        else
+            quotes "Submodule $submodule not found, initializing..."
+            git submodule update --init "$submodule"
+        fi
+    done
+}
+
+# =============================================================================
 # FUNGSI UPDATE SUBMODULE DAN KERNELSU
 # =============================================================================
 
-# Fungsi untuk update semua submodules termasuk KernelSU-Next
+# Fungsi untuk update semua submodules termasuk KernelSU-Next (diperbaiki)
 update_submodules() {
     separator
     quotes "Updating all Submodules to Latest Commits"
     
+    # Clean up any corrupted submodule states
+    quotes "Cleaning submodule state..."
+    git submodule deinit --all -f
+    check "Submodule Deinit"
+    
     # Update main submodules
-    git submodule update --remote --force --recursive --init
-    check "Submodules Update"
+    quotes "Initializing and updating submodules..."
+    git submodule update --init --remote --force --recursive
+    local update_status=$?
+    
+    if [ $update_status -eq 0 ]; then
+        quotes "Submodules updated successfully!"
+    else
+        quotes "Submodule update encountered issues, trying manual method..."
+        update_submodules_manual
+    fi
     
     # Specifically update KernelSU-Next jika ada di drivers/kernelsu
     if [ -d "drivers/kernelsu" ]; then
         separator
         quotes "Updating KernelSU-Next to Latest Version"
         cd drivers/kernelsu
-        git fetch origin
+        git fetch --all
         git checkout main  # atau branch yang sesuai
-        git pull origin main
+        git reset --hard origin/main
+        git pull origin main --force
         cd ../..
         check "KernelSU-Next Update"
     fi
+    
+    # Final verification
+    separator
+    quotes "Final submodule status:"
+    git submodule status
 }
 
 # Fungsi untuk update submodules (versi asli dengan perbaikan)
@@ -105,8 +190,31 @@ submodule() {
     separator
     quotes "Fetch all Submodules Update"
 
-    git submodule update --remote --force --recursive --init > /dev/null
-    check "Submodules"
+    # Debug: Tampilkan status submodule sebelum update
+    quotes "Current submodule status:"
+    git submodule status
+    
+    # Inisialisasi dan update dengan lebih verbose
+    quotes "Initializing submodules..."
+    git submodule init
+    check "Submodule Init"
+    
+    quotes "Updating submodules..."
+    git submodule update --remote --force --recursive
+    local submodule_status=$?
+    
+    if [ $submodule_status -eq 0 ]; then
+        quotes "Submodules updated successfully!"
+        
+        # Debug: Tampilkan status setelah update
+        quotes "Updated submodule status:"
+        git submodule status
+    else
+        quotes "Warning: Submodule update had issues. Trying alternative approach..."
+        
+        # Alternative approach: Update masing-masing submodule manually
+        update_submodules_manual
+    fi
 }
 
 # =============================================================================
@@ -701,6 +809,16 @@ Options:
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
     -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
+
+Supported Models:
+    beyond0lte, beyond1lte, beyond2lte, beyondx (S10 series)
+    d1, d1xks, d2s, d2x (Note10 series)
+
+Examples:
+    ./build.sh -m d2s -l 17                    # Build for d2s with Clang 17
+    ./build.sh -m beyond2lte -l 10032024       # Build for beyond2lte with Neutron Clang
+    ./build.sh -m d2s -k n                     # Build without KernelSU
+    ./build.sh -m d2s -c y                     # Clean build with reset
 EOF
 }
 
@@ -802,8 +920,9 @@ setup_model() {
         BOARD=SRPSC14C007KU
     ;;
     *)
+        echo "Error: Unknown model '$MODEL'"
         usage
-        exit
+        exit 1
     esac
 }
 
@@ -830,15 +949,20 @@ main() {
         # Change to script directory
         pushd $(dirname "$0") > /dev/null
 
+        # Fix permissions first
+        fix_submodule_permissions
+
         # Setup submodules dengan update ke versi terbaru
         if [[ "$LOCAL" == "y" ]]; then
-            submodule
+            quotes "Local build detected - updating submodules..."
+            update_submodules  # Gunakan fungsi yang diperbaiki
+            verify_submodules  # Verifikasi hasil update
         fi
 
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled - updating to latest version"
+            quotes "KernelSU enabled"
             KSU_NEXT=ksu.config
-            kernelsu  # Pastikan KernelSU selalu ter-update
+            # KernelSU sudah diupdate dalam update_submodules, jadi tidak perlu dipanggil lagi
         fi
 
         # Build process
@@ -866,4 +990,7 @@ main() {
 # EXECUTE MAIN FUNCTION
 # =============================================================================
 
-main "$@"
+# Jika script dijalankan langsung, bukan di-sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
