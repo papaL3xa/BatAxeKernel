@@ -20,6 +20,14 @@ on:
         options:
           - 'y'
           - 'n'
+      ksunvers:
+        description: 'KSUN Version (Leave Empty if None)'
+        required: false
+        default: ''
+      susfsvers:
+        description: 'SUSFS Version (Leave Empty if None)'
+        required: false
+        default: '' 
       release:
         description: 'Release this Kernal ? (y: Release - n: CI)'
         required: true
@@ -140,6 +148,8 @@ jobs:
           - **Build Date:** $(date +'%Y-%m-%d')
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
           - **KernelSU Next:** ${{ github.event.inputs.ksun }}
+          - **KernelSU Next Version:** ${{ github.event.inputs.ksunvers }}
+          - **SUFS Version:** ${{ github.event.inputs.susfsvers }}
 
           ## 📱 Supported Devices
           $(cat devices.txt)
@@ -217,6 +227,8 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           TOOLCHAIN="${{ github.event.inputs.llvm }}"
           KERNELSU="${{ github.event.inputs.ksun }}"
+          KSUNV="${{ github.event.inputs.ksunvers }}"
+          SUSFSV="${{ github.event.inputs.susfsvers }}"
           BUILD_DATE=$(date +'%Y-%m-%d')
           
           # Hitung jumlah device
@@ -230,6 +242,8 @@ jobs:
             • *Build Date:* $BUILD_DATE
             • *Toolchain:* Clang $TOOLCHAIN
             • *KernelSU Next:* $KERNELSU
+            • *KernelSU Next Version:* $KSUNV
+            • *SUSFS Version:* $SUSFSV
             • *Supported Devices:* $DEVICE_COUNT devices
                 - d1, d1xks, d2s, d2x (Note10 Series)
                 - beyond0lte, beyond1lte, beyond2lte, beyondx (S10 Series)
@@ -257,6 +271,8 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           TOOLCHAIN="${{ github.event.inputs.llvm }}"
           KERNELSU="${{ github.event.inputs.ksun }}"
+          KSUNV="${{ github.event.inputs.ksunvers }}"
+          SUSFSV="${{ github.event.inputs.susfsvers }}"
           BUILD_DATE=$(date +'%Y-%m-%d')
           
           # Hitung jumlah device
@@ -270,6 +286,8 @@ jobs:
             • *Build Date:* $BUILD_DATE
             • *Toolchain:* Clang $TOOLCHAIN
             • *KernelSU Next:* $KERNELSU
+            • *KernelSU Next Version:* $KSUNV
+            • *SUSFS Version:* $SUSFSV
             • *Supported Devices:* $DEVICE_COUNT devices
                 - d1, d1xks, d2s, d2x (Note10 Series)
                 - beyond0lte, beyond1lte, beyond2lte, beyondx (S10 Series)
