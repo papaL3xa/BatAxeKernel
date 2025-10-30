@@ -92,11 +92,15 @@ setup_ramdisk() {
     if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/ramdisk/init"; then
         quotes "Ramdisk Binary Found!"
     else
-        mkdir -p build/AIK/ramdisk
+        if ! test -d "build/AIK/ramdisk"; then
+            mkdir -p build/AIK/ramdisk
+        fi
+        
         if ! test -f "build/AIK/ramdisk/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
+
         if ! test -f "build/AIK/ramdisk/init"; then
             quotes "Getting Ramdisk init"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/init
@@ -105,7 +109,9 @@ setup_ramdisk() {
 
     if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
+        rm -rf build/AIK/ramdisk/fstab.exynos982*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
+        check "Fstab for Exynos 982$SOC"
     fi
 }
 
@@ -115,25 +121,40 @@ setup_dtb_tools() {
     else
         quotes "Getting DTB Build Script"
         curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
+        check "DTB Build Script"
     fi
 
-    if ! test -d "build/dtconfigs"; then
-        mkdir -p build/dtconfigs
-    fi
+    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
+        quotes "DTB Config Directory Found!"
+    else
+        if ! test -d "build/dtconfigs"; then
+            mkdir -p build/dtconfigs
+        fi
 
+        download_dtb_configs
+        check "DTB Config Directory"
+    fi
+}
+
+download_dtb_configs() {
     if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
         quotes "Getting DTB Config for Exynos 982$SOC"
         curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
     fi
 
     if ! test -f "build/dtconfigs/$MODEL.cfg"; then
-        quotes "Getting DTB Config for $MODEL"
+        quotes "Getting DTB Config for $DEVICE ($MODEL)"
+
         if [[ "$MODEL" == "d1xks" ]]; then
             curl -LSs "${REPO_URL}toolchains/configs/d1x.cfg" -o build/dtconfigs/$MODEL.cfg
         else
             curl -LSs "${REPO_URL}toolchains/configs/$MODEL.cfg" -o build/dtconfigs/$MODEL.cfg
         fi
-        [[ "$MODEL" == "d2s" ]] && sed -i "s/d2/$MODEL/g" build/dtconfigs/$MODEL.cfg
+
+        # Patch untuk model d2s
+        if [[ "$MODEL" == "d2s" ]]; then
+            sed -i "s/d2/$MODEL/g" build/dtconfigs/$MODEL.cfg
+        fi
     fi
 }
 
@@ -177,18 +198,22 @@ setup_module_files() {
     if ! test -f "build/module-binary"; then
         quotes "Getting Module Binary"
         curl -LSs "https://raw.githubusercontent.com/Zackptg5/MMT-Extended/refs/heads/master/META-INF/com/google/android/update-binary" -o build/module-binary
+        check "Module Binary"
     fi
 
     quotes "Getting Module Props"
     curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.prop build/
+    check "Module Props"
 
     if ! test -f "build/update-binary"; then
         quotes "Getting Kernel Zip Binary"
         curl -LOSs "${REPO_URL}toolchains/update-binary"
+        check "Kernel Zip Binary"
     fi
 
     quotes "Getting Kernel Zip Script"
     curl -LOSs "${BUILD_URL}updater-script" && mv updater-script build/
+    check "Kernel Zip Script"
 }
 
 # =============================================================================
@@ -354,11 +379,14 @@ ramdisk() {
     quotes "Building Boot Image"
     
     # Clean AIK directory
-    rm -rf build/AIK/split_img build/AIK/ramdisk-new.cpio.gz build/AIK/image-new.img
+    rm -rf build/AIK/split_img build/AIK/ramdisk-new.cpio.* build/AIK/image-new.img
     mkdir -p build/AIK/split_img
     
-    # Copy kernel image
+    # Copy kernel image dengan nama file yang kompatibel AIK versi baru
     cp out/arch/arm64/boot/Image build/AIK/split_img/kernel
+    
+    # Setup boot image components untuk AIK versi baru
+    setup_boot_image_components
     
     # Create boot image
     cd build/AIK
@@ -366,6 +394,30 @@ ramdisk() {
     cd ../..
     
     check "Boot Image"
+}
+
+# Fungsi untuk setup komponen boot image yang kompatibel dengan AIK terbaru
+setup_boot_image_components() {
+    pushd build/AIK/split_img > /dev/null
+    
+    # File yang diperlukan oleh AIK versi baru
+    echo "kernel" > type
+    echo "0x10000000" > base
+    echo "$BOARD" > board
+    echo "loop.max_part=7" > cmdline
+    echo "sha1" > hash
+    echo "1" > headerversion
+    echo "0x00008000" > kernel_offset
+    echo "45285376" > origsize
+    echo "2023-04" > oslevel
+    echo "12.0.0" > osversion
+    echo "2048" > pagesize
+    echo "0x01000000" > ramdisk_offset
+    echo "gzip" > ramdiskcomp
+    echo "0xf0000000" > second_offset
+    echo "0x00000100" > tags_offset
+    
+    popd > /dev/null
 }
 
 # =============================================================================
@@ -381,17 +433,37 @@ build_zip() {
     mkdir -p build/export
     mkdir -p build/out/$MODEL/zip/META-INF/com/google/android
     
-    # Copy files
-    cp build/AIK/image-new.img build/out/$MODEL/zip/boot.img
-    cp build/out/$MODEL/dtb_exynos982$SOC.img build/out/$MODEL/zip/dtb.img
-    cp build/out/$MODEL/dtbo_$MODEL.img build/out/$MODEL/zip/dtbo.img
-    cp build/update-binary build/out/$MODEL/zip/META-INF/com/google/android/
-    cp build/updater-script build/out/$MODEL/zip/META-INF/com/google/android/
+    # Copy boot image dan file lainnya - PERBAIKAN PATH DI SINI
+    if test -f "build/AIK/image-new.img"; then
+        cp build/AIK/image-new.img build/out/$MODEL/zip/boot.img
+    else
+        quotes "ERROR: Boot image not found!"
+        abort
+    fi
     
-    # Update updater script with build info
-    sed -i "s/Kernel Version: /Kernel Version: $KERNEL_VERSION/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
-    sed -i "s/Device: /Device: $DEVICE ($MODEL)/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
-    sed -i "s/Toolchain: /Toolchain: $CLANG_INFO/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    if test -f "build/out/$MODEL/dtb_exynos982$SOC.img"; then
+        cp build/out/$MODEL/dtb_exynos982$SOC.img build/out/$MODEL/zip/dtb.img
+    fi
+    
+    if test -f "build/out/$MODEL/dtbo_$MODEL.img"; then
+        cp build/out/$MODEL/dtbo_$MODEL.img build/out/$MODEL/zip/dtbo.img
+    fi
+    
+    # Copy update scripts dan binaries
+    if test -f "build/update-binary"; then
+        cp build/update-binary build/out/$MODEL/zip/META-INF/com/google/android/
+    fi
+    
+    if test -f "build/updater-script"; then
+        cp build/updater-script build/out/$MODEL/zip/META-INF/com/google/android/
+    fi
+    
+    # Update updater script dengan build info
+    if test -f "build/out/$MODEL/zip/META-INF/com/google/android/updater-script"; then
+        sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+        sed -i "s/ui_print(\" Device: \");/ui_print(\" Device: $DEVICE ($MODEL)\");/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+        sed -i "s/ui_print(\" Toolchain: \");/ui_print(\" Toolchain: $CLANG_INFO\");/g" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    fi
     
     # Create zip
     cd build/out/$MODEL/zip
@@ -400,11 +472,33 @@ build_zip() {
     else
         ZIP_NAME="$KERNEL_NAME-$KERNEL_VERSION-$MODEL-$DATE.zip"
     fi
-    zip -r9 ../$ZIP_NAME .
-    cd ../../..
-    mv build/out/$MODEL/$ZIP_NAME build/export/
     
-    quotes "Zip created: build/export/$ZIP_NAME"
+    # Pastikan file boot.img ada sebelum membuat zip
+    if test -f "boot.img"; then
+        zip -r9 ../$ZIP_NAME .
+        quotes "Zip created successfully with boot.img"
+    else
+        quotes "ERROR: boot.img not found in zip directory!"
+        abort
+    fi
+    
+    cd ../../..
+    
+    # Pindah zip ke export directory
+    if test -f "build/out/$MODEL/$ZIP_NAME"; then
+        mv build/out/$MODEL/$ZIP_NAME build/export/
+        quotes "Flashable zip created: build/export/$ZIP_NAME"
+        
+        # Verifikasi zip contains boot.img
+        if unzip -l "build/export/$ZIP_NAME" | grep -q "boot.img"; then
+            quotes "Verification: boot.img found in zip file"
+        else
+            quotes "WARNING: boot.img not found in final zip file!"
+        fi
+    else
+        quotes "ERROR: Zip file not created!"
+        abort
+    fi
 }
 
 # =============================================================================
