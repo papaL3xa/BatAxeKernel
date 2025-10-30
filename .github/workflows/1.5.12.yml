@@ -59,7 +59,7 @@ jobs:
         with:
           fetch-depth: 1
           # TAMBAHKAN INI untuk mengundang submodules
-          submodules: recursive
+          submodules: true
 
       - name: 🔄 Initialize and Update Submodules
         run: |
