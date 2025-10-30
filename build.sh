@@ -116,6 +116,30 @@ verify_submodules() {
     fi
 }
 
+# Fungsi untuk verifikasi khusus KernelSU
+verify_kernelsu() {
+    separator
+    quotes "Verifying KernelSU submodule..."
+    
+    if [ ! -d "drivers/kernelsu" ]; then
+        quotes "ERROR: KernelSU directory not found!"
+        return 1
+    fi
+    
+    if [ ! -f "drivers/kernelsu/Kconfig" ]; then
+        quotes "ERROR: KernelSU Kconfig file not found!"
+        return 1
+    fi
+    
+    if [ ! -f "drivers/kernelsu/Makefile" ]; then
+        quotes "ERROR: KernelSU Makefile not found!"
+        return 1
+    fi
+    
+    quotes "✓ KernelSU submodule verified successfully!"
+    return 0
+}
+
 # Fungsi alternatif untuk update manual
 update_submodules_manual() {
     separator
@@ -144,6 +168,47 @@ update_submodules_manual() {
 # FUNGSI UPDATE SUBMODULE DAN KERNELSU
 # =============================================================================
 
+# Fungsi untuk memperbaiki KernelSU submodule yang rusak
+fix_kernelsu_submodule() {
+    separator
+    quotes "Checking and fixing KernelSU submodule..."
+    
+    # Jika drivers/kernelsu ada tapi kosong atau rusak
+    if [ -d "drivers/kernelsu" ] && [ ! -f "drivers/kernelsu/Kconfig" ]; then
+        quotes "KernelSU directory exists but Kconfig missing - repairing..."
+        rm -rf drivers/kernelsu
+    fi
+    
+    # Jika drivers/kernelsu tidak ada
+    if [ ! -d "drivers/kernelsu" ]; then
+        quotes "KernelSU submodule missing - initializing..."
+        
+        # Hapus entry yang mungkin corrupt
+        git config --file .gitmodules --remove-section submodule.drivers/kernelsu 2>/dev/null || true
+        git config --remove-section submodule.drivers/kernelsu 2>/dev/null || true
+        
+        # Tambahkan submodule KernelSU
+        quotes "Adding KernelSU submodule..."
+        git submodule add -f https://github.com/tiann/KernelSU.git drivers/kernelsu
+        check "KernelSU Submodule Add"
+        
+        # Update to latest
+        cd drivers/kernelsu
+        git fetch origin
+        git checkout main
+        git pull origin main
+        cd ../..
+    fi
+    
+    # Verifikasi akhir
+    if verify_kernelsu; then
+        quotes "KernelSU submodule fixed successfully!"
+    else
+        quotes "Failed to fix KernelSU submodule!"
+        return 1
+    fi
+}
+
 # Fungsi untuk update semua submodules termasuk KernelSU-Next (diperbaiki)
 update_submodules() {
     separator
@@ -169,14 +234,17 @@ update_submodules() {
     # Specifically update KernelSU-Next jika ada di drivers/kernelsu
     if [ -d "drivers/kernelsu" ]; then
         separator
-        quotes "Updating KernelSU-Next to Latest Version"
+        quotes "Updating KernelSU to Latest Version"
         cd drivers/kernelsu
         git fetch --all
         git checkout main  # atau branch yang sesuai
         git reset --hard origin/main
         git pull origin main --force
         cd ../..
-        check "KernelSU-Next Update"
+        check "KernelSU Update"
+    else
+        quotes "KernelSU submodule not found, need to fix..."
+        fix_kernelsu_submodule
     fi
     
     # Final verification
@@ -558,24 +626,28 @@ setup_clang_environment() {
 
 kernelsu() {
     separator
-    quotes "Checking KernelSU Next Directory"
+    quotes "Setting up KernelSU"
     
-    # Cek apakah drivers/kernelsu sudah ada
-    if test -d "drivers/kernelsu"; then
-        quotes "KernelSU Next Directory Found - Ensuring Latest Version"
-        # Update KernelSU ke versi terbaru
-        cd drivers/kernelsu
-        git fetch origin
-        git checkout main  # atau branch yang sesuai
-        git pull origin main
-        cd ../..
-        check "KernelSU Next Update"
-    else
-        quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
-        abort
+    # First, make sure KernelSU submodule is properly initialized
+    if ! verify_kernelsu; then
+        quotes "KernelSU submodule has issues, attempting to fix..."
+        fix_kernelsu_submodule
     fi
     
-    check "KernelSU Setup"
+    # Verify again after fix attempt
+    if verify_kernelsu; then
+        quotes "KernelSU setup completed successfully!"
+        KSU_NEXT=ksu.config
+    else
+        quotes "ERROR: KernelSU setup failed! Cannot continue with KSU build."
+        if [[ "$KSU" == "y" ]]; then
+            quotes "KernelSU is required but setup failed. Aborting."
+            abort
+        else
+            quotes "Continuing without KernelSU..."
+            KSU_NEXT=""
+        fi
+    fi
 }
 
 # =============================================================================
@@ -594,21 +666,27 @@ kernel() {
     noquotes "Build Date: `date +"%Y-%m-%d"`"
 
     if [ -z $KSU_NEXT ]; then
-        noquotes "KernelSU Next with SuSFS: Not Include"
+        noquotes "KernelSU: Not Included"
     else
-        noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
+        noquotes "KernelSU: Included"
     fi
 
     # Update kernel configuration
     update_kernel_config
 
-    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config"
+    if [ ! -z $KSU_NEXT ]; then
+        DEFCONFIG="$DEFCONFIG $KSU_NEXT"
+    fi
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
     quotes "Generating Configuration Files"
     separator
 
+    # Debug: Show the defconfig files we're using
+    quotes "Using defconfig files: $DEFCONFIG"
+    
     make -j$(nproc --all) $ARGS $DEFCONFIG || abort
 
     separator
@@ -833,7 +911,7 @@ parse_arguments() {
                 shift 2
                 ;;
             --ksu|-k)
-                KSU_OPTION="$2"
+                KSU="$2"
                 shift 2
                 ;;
             --ver|-v)
@@ -959,10 +1037,13 @@ main() {
             verify_submodules  # Verifikasi hasil update
         fi
 
+        # Setup KernelSU jika diaktifkan
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled"
-            KSU_NEXT=ksu.config
-            # KernelSU sudah diupdate dalam update_submodules, jadi tidak perlu dipanggil lagi
+            quotes "KernelSU enabled - setting up..."
+            kernelsu
+        else
+            quotes "KernelSU disabled"
+            KSU_NEXT=""
         fi
 
         # Build process
