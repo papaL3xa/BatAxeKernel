@@ -556,7 +556,7 @@ ramdisk() {
     quotes "Building Ramdisk"
     separator
 
-    rm -rf build/AIK/split_img
+    rm -rf build/AIK/s*
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
     
@@ -572,19 +572,19 @@ ramdisk() {
     # Create ramdisk directories
     create_ramdisk_directories
 
-    ./repackimg.sh
+    ./mkimg
     popd > /dev/null
 }
 
 # Fungsi untuk setup komponen boot image
 setup_boot_image_components() {
-    mv ../../../out/arch/arm64/boot/Image boot.img-zImage
+    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
     echo -e "loop.max_part=7" > boot.img-cmdline
     echo -e "sha1" > boot.img-hashtype
     echo -e "1" > boot.img-header_version
-    echo -e "AOSP" > boot.img-oslevel
+    echo -e "AOSP" > boot.img-imgtype
     echo -e "0x00008000" > boot.img-kernel_offset
     echo -e "45285376" > boot.img-origsize
     echo -e "2023-04" > boot.img-os_patch_level
@@ -664,9 +664,8 @@ copy_files_to_zip() {
 # Fungsi untuk membuat module zip
 create_module_zip() {
     cd out/$MODEL/zip/module
-    zip -r ../module.zip . > /dev/null 2>&1
-    rm -rf ../module
-    cd ../../..
+    zip -r ../module.zip .
+    rm -rf out/$MODEL/zip/module
 }
 
 # Fungsi untuk update updater script dengan informasi build
@@ -683,7 +682,7 @@ create_final_zip() {
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null
-        zip -r ../"$NAME" . > /dev/null 2>&1
+        zip -r ../"$NAME" .
         popd > /dev/null
         pushd build/out > /dev/null
         rm -rf $MODEL/zip
