@@ -58,8 +58,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          # TAMBAHKAN INI untuk mengundang submodules
-          submodules: true
 
       - name: 🔄 Initialize and Update Submodules
         run: |
