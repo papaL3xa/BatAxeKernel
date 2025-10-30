@@ -40,7 +40,7 @@ clean() {
         separator
         quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
         separator
-        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* build/out build/export && git clean -df && git reset --hard HEAD
+        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
     fi
 }
 
@@ -75,269 +75,17 @@ check() {
 }
 
 # =============================================================================
-# FUNGSI FIX PERMISSIONS DAN VERIFIKASI
+# FUNGSI SETUP ENVIRONMENT
 # =============================================================================
 
-# Fungsi untuk membersihkan symbolic links yang mengganggu
-cleanup_symlinks() {
-    separator
-    quotes "Cleaning up problematic symbolic links..."
-    
-    # Cari dan hapus symbolic links di drivers/ yang mungkin bermasalah
-    find drivers/ -type l -name "kernelsu" -delete 2>/dev/null || true
-    
-    # Hapus dari git cache jika ada
-    git rm --cached -r drivers/kernelsu 2>/dev/null || true
-    
-    quotes "Symbolic links cleanup completed!"
-}
-
-# Fungsi untuk fix submodule permissions
-fix_submodule_permissions() {
-    separator
-    quotes "Fixing submodule permissions..."
-    
-    find . -name ".gitmodules" -exec chmod 644 {} \;
-    find . -name ".git" -type d -exec chmod 755 {} \;
-    find .git/modules -type d -exec chmod 755 {} \; 2>/dev/null || true
-    
-    quotes "Permissions fixed!"
-}
-
-# Fungsi untuk verifikasi submodule
-verify_submodules() {
-    separator
-    quotes "Verifying submodules..."
-    
-    local submodules=$(git submodule status | awk '{print $2}')
-    local all_ok=true
-    
-    for submodule in $submodules; do
-        if [ ! -d "$submodule" ] || [ -z "$(ls -A $submodule)" ]; then
-            quotes "ERROR: Submodule $submodule is missing or empty!"
-            all_ok=false
-        else
-            quotes "✓ $submodule: OK"
-        fi
-    done
-    
-    if [ "$all_ok" = true ]; then
-        quotes "All submodules verified successfully!"
-        return 0
-    else
-        quotes "Some submodules have issues!"
-        return 1
-    fi
-}
-
-# Fungsi untuk verifikasi khusus KernelSU
-verify_kernelsu() {
-    separator
-    quotes "Verifying KernelSU submodule..."
-    
-    if [ ! -d "drivers/kernelsu" ]; then
-        quotes "ERROR: KernelSU directory not found!"
-        return 1
-    fi
-    
-    if [ ! -f "drivers/kernelsu/Kconfig" ]; then
-        quotes "ERROR: KernelSU Kconfig file not found!"
-        return 1
-    fi
-    
-    if [ ! -f "drivers/kernelsu/Makefile" ]; then
-        quotes "ERROR: KernelSU Makefile not found!"
-        return 1
-    fi
-    
-    quotes "✓ KernelSU submodule verified successfully!"
-    return 0
-}
-
-# Fungsi alternatif untuk update manual
-update_submodules_manual() {
-    separator
-    quotes "Trying manual submodule update..."
-    
-    # Get list of submodules
-    local submodules=$(git config --file .gitmodules --get-regexp path | awk '{print $2}')
-    
-    for submodule in $submodules; do
-        if [ -d "$submodule" ]; then
-            quotes "Updating $submodule..."
-            cd "$submodule"
-            git fetch --all
-            git reset --hard HEAD
-            git checkout main 2>/dev/null || git checkout master 2>/dev/null || git checkout $(git branch -r | grep -v '\->' | awk '{print $1}' | head -1 | sed 's#origin/##')
-            git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || git pull origin $(git branch -r | grep -v '\->' | awk '{print $1}' | head -1 | sed 's#origin/##')
-            cd ..
-        else
-            quotes "Submodule $submodule not found, initializing..."
-            git submodule update --init "$submodule"
-        fi
-    done
-}
-
-# =============================================================================
-# FUNGSI UPDATE SUBMODULE DAN KERNELSU
-# =============================================================================
-
-# Fungsi untuk memperbaiki KernelSU submodule yang rusak
-fix_kernelsu_submodule() {
-    separator
-    quotes "Checking and fixing KernelSU submodule..."
-    
-    # Jika drivers/kernelsu ada sebagai symbolic link, hapus
-    if [ -L "drivers/kernelsu" ]; then
-        quotes "KernelSU is a symbolic link - removing..."
-        rm -f drivers/kernelsu
-    fi
-    
-    # Jika drivers/kernelsu ada tapi kosong atau rusak
-    if [ -d "drivers/kernelsu" ] && [ ! -f "drivers/kernelsu/Kconfig" ]; then
-        quotes "KernelSU directory exists but Kconfig missing - repairing..."
-        rm -rf drivers/kernelsu
-    fi
-    
-    # Jika drivers/kernelsu tidak ada
-    if [ ! -d "drivers/kernelsu" ]; then
-        quotes "KernelSU submodule missing - initializing..."
-        
-        # Hapus entry yang mungkin corrupt dari git
-        git config --file .gitmodules --remove-section submodule.drivers/kernelsu 2>/dev/null || true
-        git config --remove-section submodule.drivers/kernelsu 2>/dev/null || true
-        
-        # Hapus dari index git jika ada
-        git rm --cached drivers/kernelsu 2>/dev/null || true
-        
-        # Pastikan direktori parent ada
-        mkdir -p drivers
-        
-        # Tambahkan submodule KernelSU
-        quotes "Adding KernelSU submodule..."
-        git submodule add -f https://github.com/tiann/KernelSU.git drivers/kernelsu
-        check "KernelSU Submodule Add"
-        
-        # Update to latest
-        cd drivers/kernelsu
-        git fetch origin
-        git checkout main
-        git pull origin main
-        cd ../..
-    fi
-    
-    # Verifikasi akhir
-    if verify_kernelsu; then
-        quotes "KernelSU submodule fixed successfully!"
-        return 0
-    else
-        quotes "Failed to fix KernelSU submodule!"
-        return 1
-    fi
-}
-
-# Alternative KernelSU setup tanpa submodule
-setup_kernelsu_manual() {
-    separator
-    quotes "Setting up KernelSU manually (without submodule)..."
-    
-    rm -rf drivers/kernelsu
-    mkdir -p drivers/kernelsu
-    
-    quotes "Downloading KernelSU source directly..."
-    curl -L https://github.com/tiann/KernelSU/archive/refs/heads/main.tar.gz | tar -xz -C drivers/kernelsu --strip-components=1
-    
-    if verify_kernelsu; then
-        quotes "KernelSU manual setup completed successfully!"
-        return 0
-    else
-        quotes "KernelSU manual setup failed!"
-        return 1
-    fi
-}
-
-# Fungsi untuk update semua submodules termasuk KernelSU-Next (diperbaiki)
-update_submodules() {
-    separator
-    quotes "Updating all Submodules to Latest Commits"
-    
-    # Clean up symbolic links pertama
-    cleanup_symlinks
-    
-    # Clean up any corrupted submodule states
-    quotes "Cleaning submodule state..."
-    git submodule deinit --all -f
-    check "Submodule Deinit"
-    
-    # Update main submodules
-    quotes "Initializing and updating submodules..."
-    git submodule update --init --remote --force --recursive
-    local update_status=$?
-    
-    if [ $update_status -eq 0 ]; then
-        quotes "Submodules updated successfully!"
-    else
-        quotes "Submodule update encountered issues, trying manual method..."
-        update_submodules_manual
-    fi
-    
-    # Specifically update KernelSU-Next jika ada di drivers/kernelsu
-    if [ -d "drivers/kernelsu" ]; then
-        separator
-        quotes "Updating KernelSU to Latest Version"
-        cd drivers/kernelsu
-        git fetch --all
-        git checkout main  # atau branch yang sesuai
-        git reset --hard origin/main
-        git pull origin main --force
-        cd ../..
-        check "KernelSU Update"
-    else
-        quotes "KernelSU submodule not found, need to fix..."
-        fix_kernelsu_submodule
-    fi
-    
-    # Final verification
-    separator
-    quotes "Final submodule status:"
-    git submodule status
-}
-
-# Fungsi untuk update submodules (versi asli dengan perbaikan)
+# Fungsi untuk update submodules
 submodule() {
     separator
     quotes "Fetch all Submodules Update"
 
-    # Debug: Tampilkan status submodule sebelum update
-    quotes "Current submodule status:"
-    git submodule status
-    
-    # Inisialisasi dan update dengan lebih verbose
-    quotes "Initializing submodules..."
-    git submodule init
-    check "Submodule Init"
-    
-    quotes "Updating submodules..."
-    git submodule update --remote --force --recursive
-    local submodule_status=$?
-    
-    if [ $submodule_status -eq 0 ]; then
-        quotes "Submodules updated successfully!"
-        
-        # Debug: Tampilkan status setelah update
-        quotes "Updated submodule status:"
-        git submodule status
-    else
-        quotes "Warning: Submodule update had issues. Trying alternative approach..."
-        
-        # Alternative approach: Update masing-masing submodule manually
-        update_submodules_manual
-    fi
+    git submodule init && git submodule update --remote
+    check "Submodules"
 }
-
-# =============================================================================
-# FUNGSI SETUP ENVIRONMENT
-# =============================================================================
 
 # Fungsi untuk mendeteksi dan setup environment build
 detect_env() {
@@ -405,27 +153,27 @@ detect_env() {
 
 # Fungsi untuk setup ramdisk binary
 setup_ramdisk() {
-    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/ramdisk/init"; then
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
         quotes "Ramdisk Binary Found!"
     else
         if ! test -d "build/AIK/ramdisk"; then
             mkdir -p build/AIK/ramdisk
         fi
         
-        if ! test -f "build/AIK/ramdisk/dpolicy"; then
+        if ! test -f "build/AIK/dpolicy"; then
             quotes "Getting Ramdisk dpolicy"
             curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
         fi
 
-        if ! test -f "build/AIK/ramdisk/init"; then
+        if ! test -f "build/AIK/init"; then
             quotes "Getting Ramdisk init"
-            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/init
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
         fi
 
         check "Ramdisk Binary"
     fi
 
-    if ! test -f "build/AIK/ramdisk/fstab.exynos982$SOC"; then
+    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
         quotes "Get Fstab for Exynos 982$SOC"
         rm -rf build/AIK/ramdisk/f*
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
@@ -439,11 +187,11 @@ setup_dtb_tools() {
         quotes "DTB Build Script Found!"
     else
         quotes "Getting DTB Build Script"
-        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mkdtimg
+        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mk*
         check "DTB Build Script"
     fi
 
-    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
+    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
         quotes "DTB Config Directory Found!"
     else
         if ! test -d "build/dtconfigs"; then
@@ -457,12 +205,12 @@ setup_dtb_tools() {
 
 # Fungsi untuk download DTB configs
 download_dtb_configs() {
-    if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
+    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
         quotes "Getting DTB Config for Exynos 982$SOC"
         curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
     fi
 
-    if ! test -f "build/dtconfigs/$MODEL.cfg"; then
+    if ! test -f "build/dtconfig/$MODEL.cfg"; then
         quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
         if [[ "$MODEL" == "d1xks" ]]; then
@@ -487,7 +235,7 @@ setup_module_files() {
     fi
 
     quotes "Getting Module Props"
-    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.prop build/
+    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.p* build
     check "Module Props"
 
     if ! test -f "build/update-binary"; then
@@ -497,7 +245,7 @@ setup_module_files() {
     fi
 
     quotes "Getting Kernel Zip Script"
-    curl -LOSs "${BUILD_URL}updater-script" && mv updater-script build/
+    curl -LOSs "${BUILD_URL}updater-script" && mv up* build
     check "Kernel Zip Script"
 }
 
@@ -676,34 +424,17 @@ setup_clang_environment() {
 
 kernelsu() {
     separator
-    quotes "Setting up KernelSU"
+    quotes "Checking KernelSU Next Directory"
     
-    # Cleanup symbolic links terlebih dahulu
-    cleanup_symlinks
-    
-    # First, make sure KernelSU submodule is properly initialized
-    if ! verify_kernelsu; then
-        quotes "KernelSU submodule has issues, attempting to fix..."
-        if ! fix_kernelsu_submodule; then
-            quotes "Trying manual KernelSU setup..."
-            setup_kernelsu_manual
-        fi
-    fi
-    
-    # Verify again after fix attempt
-    if verify_kernelsu; then
-        quotes "KernelSU setup completed successfully!"
-        KSU_NEXT=ksu.config
+    # Cek apakah drivers/kernelsu sudah ada
+    if test -d "drivers/kernelsu"; then
+        quotes "KernelSU Next Directory Found!"
     else
-        quotes "ERROR: KernelSU setup failed! Cannot continue with KSU build."
-        if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU is required but setup failed. Aborting."
-            abort
-        else
-            quotes "Continuing without KernelSU..."
-            KSU_NEXT=""
-        fi
+        quotes "KernelSU Next Directory Not Found! Please run: git submodule update --init --recursive"
+        abort
     fi
+    
+    check "KernelSU Setup"
 }
 
 # =============================================================================
@@ -722,27 +453,21 @@ kernel() {
     noquotes "Build Date: `date +"%Y-%m-%d"`"
 
     if [ -z $KSU_NEXT ]; then
-        noquotes "KernelSU: Not Included"
+        noquotes "KernelSU Next with SuSFS: Not Include"
     else
-        noquotes "KernelSU: Included"
+        noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
     fi
 
     # Update kernel configuration
     update_kernel_config
 
-    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config"
-    if [ ! -z $KSU_NEXT ]; then
-        DEFCONFIG="$DEFCONFIG $KSU_NEXT"
-    fi
+    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
     quotes "Generating Configuration Files"
     separator
 
-    # Debug: Show the defconfig files we're using
-    quotes "Using defconfig files: $DEFCONFIG"
-    
     make -j$(nproc --all) $ARGS $DEFCONFIG || abort
 
     separator
@@ -943,17 +668,7 @@ Options:
     -h, --help             List all Build Script Command
     -r, --rel [y/N]        Release kernel (y:Release Version N: CI Version)
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
-
-Supported Models:
-    beyond0lte, beyond1lte, beyond2lte, beyondx (S10 series)
-    d1, d1xks, d2s, d2x (Note10 series)
-
-Examples:
-    ./build.sh -m d2s -l 17                    # Build for d2s with Clang 17
-    ./build.sh -m beyond2lte -l 10032024       # Build for beyond2lte with Neutron Clang
-    ./build.sh -m d2s -k n                     # Build without KernelSU
-    ./build.sh -m d2s -c y                     # Clean build with reset
+    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
 EOF
 }
 
@@ -968,7 +683,7 @@ parse_arguments() {
                 shift 2
                 ;;
             --ksu|-k)
-                KSU="$2"
+                KSU_OPTION="$2"
                 shift 2
                 ;;
             --ver|-v)
@@ -1055,9 +770,8 @@ setup_model() {
         BOARD=SRPSC14C007KU
     ;;
     *)
-        echo "Error: Unknown model '$MODEL'"
         usage
-        exit 1
+        exit
     esac
 }
 
@@ -1084,23 +798,15 @@ main() {
         # Change to script directory
         pushd $(dirname "$0") > /dev/null
 
-        # Fix permissions first
-        fix_submodule_permissions
-
-        # Setup submodules dengan update ke versi terbaru
+        # Setup submodules jika running di local
         if [[ "$LOCAL" == "y" ]]; then
-            quotes "Local build detected - updating submodules..."
-            update_submodules  # Gunakan fungsi yang diperbaiki
-            verify_submodules  # Verifikasi hasil update
+            submodule
         fi
 
-        # Setup KernelSU jika diaktifkan
         if [[ "$KSU" == "y" ]]; then
-            quotes "KernelSU enabled - setting up..."
-            kernelsu
-        else
-            quotes "KernelSU disabled"
-            KSU_NEXT=""
+            quotes "KernelSU enabled - assuming manual submodule setup"
+            KSU_NEXT=ksu.config
+            # kernelsu  # Dikomentari karena submodule sudah diatur manual
         fi
 
         # Build process
@@ -1128,7 +834,4 @@ main() {
 # EXECUTE MAIN FUNCTION
 # =============================================================================
 
-# Jika script dijalankan langsung, bukan di-sourced
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+main "$@"
