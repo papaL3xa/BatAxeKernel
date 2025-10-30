@@ -74,24 +74,9 @@ jobs:
           echo "BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA" >> $GITHUB_ENV
           echo "BUILD_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
 
-      - name: "💡 Setup KernelSu"
-        run: |
-          if [ -d "./KernelSU-Next" ]; then rm -rf "./KernelSU-Next"; fi
-          if [ -d "./drivers/KernelSU-Next" ]; then rm -rf "./drivers/KernelSU-Next"; fi 
-          curl -LSs "https://raw.githubusercontent.com/Star-Seven/KernelSU-Next/next/kernel/setup.sh" | bash -
-
-      - name: "😄 Setup and Apply susfs4ksu Patches"
-        run: |
-           set -e
-
-           # Backport SUSFS to Linux 4.14
-           git clone https://github.com/Star-Seven/susfs4ksu -b M62-backport-Susfs susfs4ksu-repo
-
-           cp susfs4ksu-repo/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU-Next/
-           cd ./KernelSU-Next
-           patch -p1 -F 3 < 10_enable_susfs_for_ksu.patch || { echo "Failed to apply patch"; exit 1; }
-           echo "Successfully applied susfs4ksu patches"
-           
+      - name: ⭐Checkout repository with submodules
+        uses: actions/checkout@v4
+                          
       - name: ⚙️ setting permission
         run: chmod +x build.sh
 

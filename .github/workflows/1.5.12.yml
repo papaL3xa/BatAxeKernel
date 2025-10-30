@@ -76,8 +76,6 @@ jobs:
 
       - name: ⭐Checkout repository with submodules
         uses: actions/checkout@v4
-        with:
-          submodules: true
                
       - name: ⚙️ setting permission
         run: chmod +x build.sh
