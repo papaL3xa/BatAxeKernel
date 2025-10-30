@@ -40,7 +40,7 @@ clean() {
         separator
         quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
         separator
-        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
+        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* build/out build/export && git clean -df && git reset --hard HEAD
     fi
 }
 
@@ -77,6 +77,20 @@ check() {
 # =============================================================================
 # FUNGSI FIX PERMISSIONS DAN VERIFIKASI
 # =============================================================================
+
+# Fungsi untuk membersihkan symbolic links yang mengganggu
+cleanup_symlinks() {
+    separator
+    quotes "Cleaning up problematic symbolic links..."
+    
+    # Cari dan hapus symbolic links di drivers/ yang mungkin bermasalah
+    find drivers/ -type l -name "kernelsu" -delete 2>/dev/null || true
+    
+    # Hapus dari git cache jika ada
+    git rm --cached -r drivers/kernelsu 2>/dev/null || true
+    
+    quotes "Symbolic links cleanup completed!"
+}
 
 # Fungsi untuk fix submodule permissions
 fix_submodule_permissions() {
@@ -173,6 +187,12 @@ fix_kernelsu_submodule() {
     separator
     quotes "Checking and fixing KernelSU submodule..."
     
+    # Jika drivers/kernelsu ada sebagai symbolic link, hapus
+    if [ -L "drivers/kernelsu" ]; then
+        quotes "KernelSU is a symbolic link - removing..."
+        rm -f drivers/kernelsu
+    fi
+    
     # Jika drivers/kernelsu ada tapi kosong atau rusak
     if [ -d "drivers/kernelsu" ] && [ ! -f "drivers/kernelsu/Kconfig" ]; then
         quotes "KernelSU directory exists but Kconfig missing - repairing..."
@@ -183,9 +203,15 @@ fix_kernelsu_submodule() {
     if [ ! -d "drivers/kernelsu" ]; then
         quotes "KernelSU submodule missing - initializing..."
         
-        # Hapus entry yang mungkin corrupt
+        # Hapus entry yang mungkin corrupt dari git
         git config --file .gitmodules --remove-section submodule.drivers/kernelsu 2>/dev/null || true
         git config --remove-section submodule.drivers/kernelsu 2>/dev/null || true
+        
+        # Hapus dari index git jika ada
+        git rm --cached drivers/kernelsu 2>/dev/null || true
+        
+        # Pastikan direktori parent ada
+        mkdir -p drivers
         
         # Tambahkan submodule KernelSU
         quotes "Adding KernelSU submodule..."
@@ -203,8 +229,29 @@ fix_kernelsu_submodule() {
     # Verifikasi akhir
     if verify_kernelsu; then
         quotes "KernelSU submodule fixed successfully!"
+        return 0
     else
         quotes "Failed to fix KernelSU submodule!"
+        return 1
+    fi
+}
+
+# Alternative KernelSU setup tanpa submodule
+setup_kernelsu_manual() {
+    separator
+    quotes "Setting up KernelSU manually (without submodule)..."
+    
+    rm -rf drivers/kernelsu
+    mkdir -p drivers/kernelsu
+    
+    quotes "Downloading KernelSU source directly..."
+    curl -L https://github.com/tiann/KernelSU/archive/refs/heads/main.tar.gz | tar -xz -C drivers/kernelsu --strip-components=1
+    
+    if verify_kernelsu; then
+        quotes "KernelSU manual setup completed successfully!"
+        return 0
+    else
+        quotes "KernelSU manual setup failed!"
         return 1
     fi
 }
@@ -213,6 +260,9 @@ fix_kernelsu_submodule() {
 update_submodules() {
     separator
     quotes "Updating all Submodules to Latest Commits"
+    
+    # Clean up symbolic links pertama
+    cleanup_symlinks
     
     # Clean up any corrupted submodule states
     quotes "Cleaning submodule state..."
@@ -628,10 +678,16 @@ kernelsu() {
     separator
     quotes "Setting up KernelSU"
     
+    # Cleanup symbolic links terlebih dahulu
+    cleanup_symlinks
+    
     # First, make sure KernelSU submodule is properly initialized
     if ! verify_kernelsu; then
         quotes "KernelSU submodule has issues, attempting to fix..."
-        fix_kernelsu_submodule
+        if ! fix_kernelsu_submodule; then
+            quotes "Trying manual KernelSU setup..."
+            setup_kernelsu_manual
+        fi
     fi
     
     # Verify again after fix attempt
@@ -885,6 +941,7 @@ Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
+    -r, --rel [y/N]        Release kernel (y:Release Version N: CI Version)
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
     -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
 
