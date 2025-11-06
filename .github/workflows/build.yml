@@ -1,5 +1,5 @@
-name: Build (CI)
-run-name: 'CI: Build ${{ github.event.inputs.version }} from ${{ github.sha }}'
+name: Build-Test
+run-name: 'CI: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }} With Clang ${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -7,19 +7,42 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: 'v'
+        default: ''
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
         default: 'y'
       llvm:
-        description: 'Clang (12-18) or Neutron (Latest) Version'
+        description: 'Clang (12-18) (19-21:Potencial bootloop on A12) or Neutron (10032024) Version'
         required: true
-        default: 'latest'
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
       devices:
         description: 'Devices'
         required: true
-        default: '["beyond0lte", "beyond1lte", "beyond2lte", "beyondx", "d1", "d1xks", "d2s", "d2x"]'
+        default: '["d1"]'
+        type: choice
+        options: 
+          - ["d1"]
+          - ["d1xks"]
+          - ["d2s"]
+          - ["d2x"]
+          - ["beyond0lte"]
+          - ["beyond1lte"]
+          - ["beyond2lte"]
+          - ["beyondx"]
 
 jobs:
   build:

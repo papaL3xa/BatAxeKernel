@@ -448,7 +448,7 @@ kernelsu() {
 
         # Add KernelSU Next submodule
         git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
-        curl -LSs "https://raw.githubusercontent.com/papaL3xa/KernelSU-Next-gorhanhee/refs/heads/next-susfs-experimental/kernel/setup.sh" | bash -
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/KernelSU-Next-gorhanhee/refs/heads/next-susfs-experiment/kernel/setup.sh" | bash -
         check "KernelSU Next"
     fi
 
