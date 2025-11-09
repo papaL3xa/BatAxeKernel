@@ -124,6 +124,7 @@ all.config
 # fetched Android config fragments
 kernel/configs/android-*.cfg
 
+<<<<<<< HEAD
 # Build files
 build/*
 out/
@@ -142,3 +143,8 @@ KernelSU-Next/
 
 # Toolchains
 toolchain/*
+=======
+# patch file
+*.orig
+*.rej
+>>>>>>> 2931c978ba83 (kernelsu: min_scope_syscall_hooks_v1.4 patch)

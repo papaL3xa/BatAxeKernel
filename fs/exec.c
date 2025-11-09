@@ -1921,11 +1921,66 @@ void set_dumpable(struct mm_struct *mm, int value)
 	} while (cmpxchg(&mm->flags, old, new) != old);
 }
 
+#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_KPROBES_HOOK)
+extern bool ksu_execveat_hook __read_mostly;
+extern __attribute__((hot, always_inline)) int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
+			       void *__never_use_argv, void *__never_use_envp,
+			       int *__never_use_flags);
+extern int ksu_handle_execve_ksud(const char __user *filename_user,
+			const char __user *const __user *__argv);
+#endif
+
 SYSCALL_DEFINE3(execve,
 		const char __user *, filename,
 		const char __user *const __user *, argv,
 		const char __user *const __user *, envp)
 {
+#ifdef CONFIG_RKP_KDP
+	struct filename *path = getname(filename);
+	int error = PTR_ERR(path);
+
+	if(IS_ERR(path))
+		return error;
+
+	if(rkp_cred_enable){
+		uh_call(UH_APP_RKP, RKP_KDP_X4B, (u64)path->name, 0, 0, 0);
+	}
+#endif
+#if defined CONFIG_SEC_RESTRICT_FORK
+	if (CHECK_ROOT_UID(current) && sec_restrict_fork()) {
+		PRINT_LOG("Restricted making process. PID = %d(%s) "
+		"PPID = %d(%s)\n",
+		current->pid, current->comm,
+		current->parent->pid, current->parent->comm);
+#ifdef CONFIG_RKP_KDP
+		putname(path);
+#endif
+		return -EACCES;
+	}
+#ifdef CONFIG_RKP_KDP
+	if(CHECK_ROOT_UID(current) && rkp_cred_enable) {
+		if(rkp_restrict_fork(path)){
+			pr_warn("RKP_KDP Restricted making process. PID = %d(%s) "
+							"PPID = %d(%s)\n",
+			current->pid, current->comm,
+			current->parent->pid, current->parent->comm);
+			putname(path);
+			return -EACCES;
+		}
+	}
+#endif
+#endif
+#ifdef CONFIG_RKP_KDP
+	putname(path);
+#endif
+
+#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_KPROBES_HOOK)
+	if (unlikely(ksu_execveat_hook))
+		ksu_handle_execve_ksud(filename, argv);
+	else
+		ksu_handle_execve_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL);
+#endif
+
 	return do_execve(getname(filename), argv, envp);
 }
 
@@ -1947,6 +2002,10 @@ COMPAT_SYSCALL_DEFINE3(execve, const char __user *, filename,
 	const compat_uptr_t __user *, argv,
 	const compat_uptr_t __user *, envp)
 {
+#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_KPROBES_HOOK) // 32-bit su and 32-on-64 support
+	if (!ksu_execveat_hook)
+		ksu_handle_execve_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL);
+#endif
 	return compat_do_execve(getname(filename), argv, envp);
 }
 
