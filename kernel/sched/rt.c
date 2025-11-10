@@ -2610,9 +2610,13 @@ static inline int affordable_cpu(int cpu, unsigned long task_load)
 extern unsigned long task_util(struct task_struct *p);
 unsigned long frt_cpu_util_wake(int cpu, struct task_struct *p)
 {
-	struct cfs_rq *cfs_rq = &cpu_rq(cpu)->cfs;
-	struct rt_rq *rt_rq = &cpu_rq(cpu)->rt;
+	struct cfs_rq *cfs_rq;
+	struct rt_rq *rt_rq;
+	struct rq *rq;
 	unsigned int util;
+
+	cfs_rq = &cpu_rq(cpu)->cfs;
+	rt_rq = &cpu_rq(cpu)->rt;
 
 	util = READ_ONCE(cfs_rq->avg.util_avg) + READ_ONCE(rt_rq->avg.util_avg);
 
@@ -2623,9 +2627,11 @@ unsigned long frt_cpu_util_wake(int cpu, struct task_struct *p)
 	 * utilization from cpu utilization. Instead just use
 	 * cpu_util for this case.
 	 */
-	if (!walt_disabled && sysctl_sched_use_walt_cpu_util)
-		return cpu_util(cpu);
-#endif
+	if (!walt_disabled && sysctl_sched_use_walt_cpu_util) {
+		rq = cpu_rq(cpu);
+		return cpu_util(rq);
+	}
+	#endif
 	/* Task has no contribution or is new */
 	if (cpu != task_cpu(p) || !READ_ONCE(p->se.avg.last_update_time))
 		return util;
