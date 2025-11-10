@@ -425,42 +425,24 @@ setup_clang_environment() {
 kernelsu() {
     separator
 
-    # Nonaktifkan patch KernelSU (dikomentari)
-    # if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-    #     quotes "Patching KernelSU to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
-    #     separator
-    #     check "KernelSU"
-    # fi
-
     # Setup KernelSU Next
     if ! test -d "drivers/kernelsu"; then
         quotes "Add KernelSU Next as Submodule"
         separator
 
-        # Clean existing KernelSU directories
-      #  if test -d "KernelSU-Next"; then
-      #      rm -rf KernelSU-Next
-      #      rm -rf Ke*
-      #  fi
+        Clean existing KernelSU directories
+        if test -d "KernelSU-Next"; then
+            rm -rf KernelSU-Next
+            rm -rf Ke*
+        fi
 
-    #   Add KernelSU Next submodule
-    #   git submodule add -f -q https://github.com/papaL3xa/KernelSU-Next-gorhanhee.git KernelSU-Next > /dev/null
-    #   curl -LSs "https://raw.githubusercontent.com/papaL3xa/KernelSU-Next-gorhanhee/refs/heads/next-susfs-experiment/kernel/setup.sh" | bash -
-    #   check "KernelSU Next"
+       Add KernelSU Next submodule
+       git submodule add -f -q https://github.com/GoRhanHee/KernelSU-Next.git KernelSU-Next > /dev/null
+       curl -LSs "https://raw.githubusercontent.com/GoRhanHee/KernelSU-Next/c380093e37f6e9c12b580ee348def4d4b53543de/kernel/setup.sh" | bash -
+       check "KernelSU Next"
 
     fi
 
-    # Nonaktifkan patch SuSFS (dikomentari)
-    # if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-    #     separator
-    #     quotes "Patching SuSFS to Kernel Tree"
-    #     separator
-    #     patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
-    #     separator
-    #     check "SuSFS"
-    # fi
 }
 
 # =============================================================================
