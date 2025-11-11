@@ -271,10 +271,18 @@ jobs:
           • *Supported Devices:* $DEVICE_COUNT devices
 
           *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+          • Note10 Series: 
+            - d1, 
+            - d1xks, 
+            - d2s, 
+            - d2x
+          • S10 Series: 
+            - beyond0lte, 
+            - beyond1lte, 
+            - beyond2lte, 
+            - beyondx
 
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
+          📥 *Download:* [GitHub Release](https://github.com/papaL3xa/BatAxeKernel/releases)
 
           💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
 
@@ -332,10 +340,18 @@ jobs:
           • *Supported Devices:* $DEVICE_COUNT devices
 
           *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+          • Note10 Series: 
+            - d1, 
+            - d1xks, 
+            - d2s, 
+            - d2x
+          • S10 Series: 
+            - beyond0lte, 
+            - beyond1lte, 
+            - beyond2lte, 
+            - beyondx
 
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
+          📥 *Download:* [GitHub Release](https://github.com/papaL3xa/BatAxeKernel/releases)
 
           💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
 
