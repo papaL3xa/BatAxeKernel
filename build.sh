@@ -83,6 +83,7 @@ submodule() {
     separator
     quotes "Fetch all Submodules Update"
 
+    git submodule init && git submodule update --remote
     git submodule update -f -q --init --recursive > /dev/null
     check "Submodules"
 }
@@ -427,22 +428,11 @@ kernelsu() {
 
     # Setup KernelSU Next
     if ! test -d "drivers/kernelsu"; then
-        quotes "Add KernelSU Next as Submodule"
+        quotes "update KernelSU Next as Submodule"
         separator
 
-        Clean existing KernelSU directories
-        if test -d "KernelSU-Next"; then
-            rm -rf KernelSU-Next
-            rm -rf Ke*
-        fi
-
-       Add KernelSU Next submodule
-       git submodule add -f -q https://github.com/GoRhanHee/KernelSU-Next.git KernelSU-Next > /dev/null
-       curl -LSs "https://raw.githubusercontent.com/GoRhanHee/KernelSU-Next/c380093e37f6e9c12b580ee348def4d4b53543de/kernel/setup.sh" | bash -
-       check "KernelSU Next"
-
+     git submodule init && git submodule update --remote
     fi
-
 }
 
 # =============================================================================

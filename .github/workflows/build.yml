@@ -61,7 +61,7 @@ jobs:
 
       - name: ⏰ Set Time Zone
         run: |
-          sudo timedatectl set-timezone Asia/Singapore    
+          sudo timedatectl set-timezone Asia/Jakarta 
 
       - name: 🪡 Setup Build Environment
         run: |
