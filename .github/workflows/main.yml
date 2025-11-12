@@ -1,4 +1,5 @@
-name: Telegram Notification
+name: Build (Release-Post Github)
+run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
   workflow_dispatch:
@@ -6,110 +7,238 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        type: string
+        default: ''
       tag:
         description: 'Release Tag'
         required: true
-        type: string
+        default: 'v'  
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
-        type: string
+        default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
       ksunvers:
         description: 'KSUN Version (Leave Empty if None)'
         required: false
-        type: string
         default: ''
       susfsvers:
         description: 'SUSFS Version (Leave Empty if None)'
         required: false
-        type: string
-        default: ''
-      llvm:
-        description: 'Clang Version'
+        default: '' 
+      release:
+        description: 'Release this Kernel ? (y: Release - n: CI)'
         required: true
+        default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
+      llvm:
+        description: 'Clang (12-18) (19-21:Potential bootloop on A12) or Neutron (10032024) Version'
+        required: true
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
+      token:
+        description: 'Token (Leave Empty to Use GitHub Token)'
+        required: false
+        default: ''
         type: string
       telegram_token:
-        description: 'Telegram Bot Token'
+        description: 'Telegram Bot Token (Leave Empty to Use Secret Token)'
         required: false
-        type: string
         default: ''
+        type: string
       telegram_chat_id:
-        description: 'Telegram Chat ID'
+        description: 'Telegram Chat ID (Leave Empty to Use Secret Token)'
         required: false
-        type: string
         default: ''
+        type: string
+      send_telegram:
+        description: 'Send Telegram Notification?'
+        required: true
+        default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
 
 jobs:
-  telegram-release:
+  build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
+
     steps:
-      - name: 📥 Download Latest Release Artifacts
+      - name: 📀 Checkout Tree
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: ⏰ Set Time Zone
+        run: |
+          sudo timedatectl set-timezone Asia/Jakarta
+
+      - name: 🪡 Setup Build Environment
+        run: |
+          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq
+          
+      - name: 💼 Set Environment Variable
+        run: |
+          SHA=$(git rev-parse --short ${{ github.sha }})
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+          echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
+          echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+     
+      - name: ⚙️ Setting Permission
+        run: chmod +x build.sh
+        
+      - name: 🏇🏻 Building Kernel
+        run: |
+          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r ${{ github.event.inputs.release }}
+
+      - name: 🧩 Upload Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
+          path: "build/export/*.zip"
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: BatAxeKernel-*
           merge-multiple: true
-          
-      - name: 📊 Count Artifacts
-        id: count-artifacts
+
+      - name: Debug Artifact Structure
         run: |
-          ARTIFACT_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
-          echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
-          echo "Found $ARTIFACT_COUNT artifacts"
-          
-      - name: 📝 Create Telegram Message
-        id: create-message
+          echo "📁 Artifact structure:"
+          find artifacts -type f -name "*.zip" | sort
+          echo ""
+          echo "📊 Total artifacts:"
+          find artifacts -name "*.zip" -type f | wc -l
+
+      - name: Create Release Body
+        id: create-body
         run: |
-          # Get device list
-          ARTIFACT_COUNT=${{ steps.count-artifacts.outputs.artifact_count }}
-          if [ "$ARTIFACT_COUNT" -eq 0 ]; then
-            DEVICES_LIST="❌ No devices built successfully"
-          else
-            find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/• /' > devices.txt
+          # Set BUILD_DATE untuk job release
+          BUILD_DATE=$(date +'%Y%m%d')
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          
+          # Cari file zip di semua subdirectory
+          if find artifacts -name "*.zip" -type f | grep -q .; then
+            echo "✅ Artifacts found!"
+            # Format device list dengan bullet points
+            find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/- /' > devices.txt
             DEVICES_LIST=$(cat devices.txt)
+            ARTIFACT_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+            echo "Found $ARTIFACT_COUNT artifacts"
+          else
+            echo "❌ No artifacts found!"
+            DEVICES_LIST="No devices built successfully"
           fi
           
-          # Create Telegram message
-          cat << EOF > telegram_message.md
-          🚀 *BatAxeKernel KSUN ${{ github.event.inputs.version }} Released!*
+          # Buat release body dengan format yang benar
+          cat << EOF > release_body.md
+          # 🚀 BatAxeKernel KSUN ${{ github.event.inputs.version }} for OneUI 4.X - Release
 
-          *📋 Build Information:*
-          • *Version:* ${{ github.event.inputs.version }}
-          • *Build Date:* $(date +'%Y-%m-%d')
-          • *Toolchain:* Clang ${{ github.event.inputs.llvm }}
-          • *KernelSU Next:* ${{ github.event.inputs.ksun }}
-          • *KernelSU Version:* ${{ github.event.inputs.ksunvers }}
-          • *SUFS Version:* ${{ github.event.inputs.susfsvers }}
+          ## ⚙️ Build Information:
+          - **Kernel Version:** ${{ github.event.inputs.version }}
+          - **Build Date:** $(date +'%Y-%m-%d')
+          - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
+          - **KernelSU Next:** ${{ github.event.inputs.ksun }}
+          - **KernelSU Next Version:** ${{ github.event.inputs.ksunvers }}
+          - **SUFS Version:** ${{ github.event.inputs.susfsvers }}
 
-          *📱 Supported Devices ($ARTIFACT_COUNT devices):*
+          ## 📱 Supported Devices:
           $DEVICES_LIST
 
-          *📥 Download:*
-          [GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
+          ## 📥 Installation
+          1. Download the appropriate zip file for your device
+          2. Flash via custom recovery (TWRP/OrangeFox)
+          3. Reboot and enjoy!
 
-          *💬 Support Group:*
-          [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
+          ## 💡 Notes
+          - Make sure you're on the latest firmware
+          - Backup your current kernel before flashing
+          - Report any issues on GitHub Issues
 
-          _Note: Flash via custom recovery and backup your current kernel first!_
+          ## 💬 Discussions
+          [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
           EOF
-          
-          MESSAGE_CONTENT=$(cat telegram_message.md)
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$MESSAGE_CONTENT" >> $GITHUB_OUTPUT
+
+          # Set output
+          BODY_CONTENT=$(cat release_body.md)
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: 📤 Send Telegram Notification
-        uses: appleboy/telegram-action@master
+      - name: 🚀 Release Build Kernel
+        id: create_release
+        uses: ncipollo/release-action@v1
         with:
-          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
-          message: ${{ steps.create-message.outputs.message }}
-          parse_mode: markdown
+          tag: ${{ github.event.inputs.tag }}
+          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          body: ${{ steps.create-body.outputs.body }}
+          draft: true
+          generateReleaseNotes: false
+          makeLatest: true
+          skipIfReleaseExists: true
+          token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
+          artifacts: "artifacts/**/*.zip"
 
-      - name: 🧹 Cleanup Downloaded Artifacts
-        if: always()
-        run: |
-          rm -rf artifacts
-          echo "Artifacts cleaned up"
+      - name: Cleanup Artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: "BatAxeKernel-*"
+
+  trigger-telegram:
+    needs: release
+    if: github.event.inputs.send_telegram == 'y'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🚀 Trigger Telegram Notification
+        uses: convictional/trigger-workflow-and-wait@v1.6.2
+        with:
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          github_token: ${{ github.token }}
+          workflow_file_name: tele-notif.yml
+          wait_interval: 30
+          client_payload: |-
+            {
+              "version": "${{ github.event.inputs.version }}",
+              "tag": "${{ github.event.inputs.tag }}",
+              "ksun": "${{ github.event.inputs.ksun }}",
+              "ksunvers": "${{ github.event.inputs.ksunvers }}",
+              "susfsvers": "${{ github.event.inputs.susfsvers }}",
+              "llvm": "${{ github.event.inputs.llvm }}",
+              "telegram_token": "${{ github.event.inputs.telegram_token }}",
+              "telegram_chat_id": "${{ github.event.inputs.telegram_chat_id }}"
+            }

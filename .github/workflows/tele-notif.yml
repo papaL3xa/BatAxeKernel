@@ -6,54 +6,39 @@ on:
       version:
         description: 'Kernel Version'
         required: true
-        default: ''
+        type: string
       tag:
         description: 'Release Tag'
         required: true
-        default: 'v'
+        type: string
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
-        default: 'YES'
-        type: choice
-        options:
-          - 'YES'
-          - 'NO'
+        type: string
       ksunvers:
         description: 'KSUN Version (Leave Empty if None)'
         required: false
+        type: string
         default: ''
       susfsvers:
         description: 'SUSFS Version (Leave Empty if None)'
         required: false
+        type: string
         default: ''
       llvm:
-        description: 'Clang (12-18) (19-21:Potential bootloop on A12) or Neutron (10032024) Version'
+        description: 'Clang Version'
         required: true
-        default: '10032024'
-        type: choice
-        options:
-          - '12'
-          - '13'
-          - '14'
-          - '15'
-          - '16'
-          - '17'
-          - '18'
-          - '19'
-          - '20'
-          - '21'
-          - '10032024'
+        type: string
       telegram_token:
-        description: 'Telegram Bot Token (Leave Empty to Use Secret Token)'
+        description: 'Telegram Bot Token'
         required: false
-        default: ''
         type: string
+        default: ''
       telegram_chat_id:
-        description: 'Telegram Chat ID (Leave Empty to Use Secret Token)'
+        description: 'Telegram Chat ID'
         required: false
-        default: ''
         type: string
+        default: ''
 
 jobs:
   telegram-release:
@@ -64,6 +49,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: BatAxeKernel-*
+          merge-multiple: true
           
       - name: 📊 Count Artifacts
         id: count-artifacts
@@ -84,50 +71,34 @@ jobs:
             DEVICES_LIST=$(cat devices.txt)
           fi
           
-          # Create variables for message
-          VERSION="${{ github.event.inputs.version }}"
-          TAG="${{ github.event.inputs.tag }}"
-          LLVM="${{ github.event.inputs.llvm }}"
-          KSUN="${{ github.event.inputs.ksun }}"
-          KSUNVERS="${{ github.event.inputs.ksunvers }}"
-          SUSFSVERS="${{ github.event.inputs.susfsvers }}"
-          REPOSITORY="${{ github.repository }}"
-          BUILD_DATE=$(date +'%Y-%m-%d')
-          
-          # Create Telegram message dengan format yang benar
-          cat << EOF > telegram_message.txt
-          🚀 *BatAxeKernel KSUN $VERSION Released\!*
+          # Create Telegram message
+          cat << EOF > telegram_message.md
+          🚀 *BatAxeKernel KSUN ${{ github.event.inputs.version }} Released!*
 
           *📋 Build Information:*
-          • *Version:* $VERSION
-          • *Build Date:* $BUILD_DATE
-          • *Toolchain:* Clang $LLVM
-          • *KernelSU Next:* $KSUN
-          • *KernelSU Version:* $KSUNVERS
-          • *SUFS Version:* $SUSFSVERS
+          • *Version:* ${{ github.event.inputs.version }}
+          • *Build Date:* $(date +'%Y-%m-%d')
+          • *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+          • *KernelSU Next:* ${{ github.event.inputs.ksun }}
+          • *KernelSU Version:* ${{ github.event.inputs.ksunvers }}
+          • *SUFS Version:* ${{ github.event.inputs.susfsvers }}
 
-          *📱 Supported Devices \($ARTIFACT_COUNT devices\):*
+          *📱 Supported Devices ($ARTIFACT_COUNT devices):*
           $DEVICES_LIST
 
           *📥 Download:*
-          [GitHub Releases](https://github.com/$REPOSITORY/releases/tag/$TAG)
+          [GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
 
           *💬 Support Group:*
-            [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
+          [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
 
-          _Note: Flash via custom recovery and backup your current kernel first\!_
+          _Note: Flash via custom recovery and backup your current kernel first!_
           EOF
           
-          # Read message content
-          MESSAGE_CONTENT=$(cat telegram_message.txt)
+          MESSAGE_CONTENT=$(cat telegram_message.md)
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo "$MESSAGE_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
-          # Debug: Tampilkan message yang akan dikirim
-          echo "=== TELEGRAM MESSAGE ==="
-          cat telegram_message.txt
-          echo "=== END MESSAGE ==="
 
       - name: 📤 Send Telegram Notification
         uses: appleboy/telegram-action@master
@@ -135,7 +106,7 @@ jobs:
           to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
           token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
           message: ${{ steps.create-message.outputs.message }}
-          parse_mode: MarkdownV2
+          parse_mode: markdown
 
       - name: 🧹 Cleanup Downloaded Artifacts
         if: always()
