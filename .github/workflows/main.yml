@@ -68,6 +68,14 @@ on:
         required: false
         default: ''
         type: string
+      send_telegram:
+        description: 'Send Telegram Notification?'
+        required: true
+        default: 'y'
+        type: choice
+        options:
+          - 'y'
+          - 'n'
 
 jobs:
   build:
@@ -209,3 +217,25 @@ jobs:
         uses: geekyeggo/delete-artifact@v5
         with:
           name: "BatAxeKernel-*"
+
+  trigger-telegram:
+    needs: release
+    if: github.event.inputs.send_telegram == 'y'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🚀 Trigger Telegram Notification
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: tele-notif.yml
+          token: ${{ github.token }}
+          inputs: '{
+            "version": "${{ github.event.inputs.version }}",
+            "tag": "${{ github.event.inputs.tag }}",
+            "ksun": "${{ github.event.inputs.ksun }}",
+            "ksunvers": "${{ github.event.inputs.ksunvers }}",
+            "susfsvers": "${{ github.event.inputs.susfsvers }}",
+            "llvm": "${{ github.event.inputs.llvm }}",
+            "telegram_token": "${{ github.event.inputs.telegram_token }}",
+            "telegram_chat_id": "${{ github.event.inputs.telegram_chat_id }}"
+          }'

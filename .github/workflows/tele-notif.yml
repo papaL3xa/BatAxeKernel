@@ -1,4 +1,4 @@
-name: Push Telegram Release
+name: Telegram Notification
 
 on:
   workflow_dispatch:
@@ -14,11 +14,11 @@ on:
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
-        default: 'YES'
+        default: 'y'
         type: choice
         options:
-          - 'YES'
-          - 'NO'
+          - 'y'
+          - 'n'
       ksunvers:
         description: 'KSUN Version (Leave Empty if None)'
         required: false
@@ -119,22 +119,6 @@ jobs:
           token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
           message: ${{ steps.create-message.outputs.message }}
           parse_mode: markdown
-
-      - name: 🖼️ Send Telegram Message with Formatting
-        if: always()
-        run: |
-          MESSAGE="${{ steps.create-message.outputs.message }}"
-          
-          # Send using curl with proper formatting
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}\",
-              \"text\": \"$MESSAGE\",
-              \"parse_mode\": \"Markdown\",
-              \"disable_web_page_preview\": true
-            }" \
-            https://api.telegram.org/bot${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}/sendMessage
 
       - name: 🧹 Cleanup Downloaded Artifacts
         if: always()
