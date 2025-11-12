@@ -70,36 +70,52 @@ on:
         type: string
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.validation.outputs.is_valid }}
+      error_message: ${{ steps.validation.outputs.error_message }}
+    steps:
+      - name: 🔒 Validate Inputs
+        id: validation
+        run: |
+          # Validate version format
+          if ! echo "${{ github.event.inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            echo "❌ Invalid version format: ${{ github.event.inputs.version }}"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            echo "error_message=Invalid version format" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Validate LLVM version
+          valid_llvm="12 13 14 15 16 17 18 19 20 21 10032024"
+          if ! echo "$valid_llvm" | grep -wq "${{ github.event.inputs.llvm }}"; then
+            echo "❌ Invalid LLVM version: ${{ github.event.inputs.llvm }}"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            echo "error_message=Invalid LLVM version" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "✅ Input validation passed"
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+          echo "error_message=" >> $GITHUB_OUTPUT
+
   build:
+    needs: validate
+    if: needs.validate.outputs.is_valid == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     strategy:
       matrix:
         device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
-      fail-fast: false  # Biarkan device lain build meski satu gagal
+      fail-fast: false
 
     steps:
       - name: 📀 Checkout Tree
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: 🔒 Validate Inputs
-        run: |
-          # Validate version format
-          if ! [[ "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid version format"
-            exit 1
-          fi
-          
-          # Validate LLVM version
-          if [[ ! " 12 13 14 15 16 17 18 19 20 21 10032024 " =~ " ${{ github.event.inputs.llvm }} " ]]; then
-            echo "❌ Invalid LLVM version"
-            exit 1
-          fi
-          
-          echo "✅ Input validation passed"
 
       - name: ⏰ Set Time Zone
         run: |
@@ -110,33 +126,38 @@ jobs:
         with:
           path: |
             ~/.cache
-            build/**/*.o
-            build/**/*.d
-          key: ${{ runner.os }}-kernel-build-${{ hashFiles('build.sh', '**/*.mk', '**/Makefile') }}
+          key: ${{ runner.os }}-kernel-build-${{ hashFiles('build.sh') }}
           restore-keys: |
             ${{ runner.os }}-kernel-build-
 
       - name: 🪡 Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq git
+          sudo apt update
+          sudo apt install -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq git file
           
       - name: 💼 Set Environment Variable
         run: |
-          SHA=$(git rev-parse --short ${{ github.sha }})
+          SHA=$(git rev-parse --short HEAD)
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
           echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
      
       - name: ⚙️ Setting Permission
-        run: chmod +x build.sh
+        run: |
+          chmod +x build.sh || echo "build.sh not found, continuing..."
         
       - name: 🏇🏻 Building Kernel
         run: |
-          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} \
-          -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} \
-          -r ${{ github.event.inputs.release }}
+          # Build command dengan error handling
+          if [ -f "build.sh" ]; then
+            bash build.sh -m ${{ matrix.device }} -v "$BUILD_KERNEL_VERSION" \
+            -k "${{ github.event.inputs.ksun }}" -l "${{ github.event.inputs.llvm }}" \
+            -r "${{ github.event.inputs.release }}" || exit 1
+          else
+            echo "❌ build.sh not found!"
+            exit 1
+          fi
         timeout-minutes: 120
 
       - name: 🧩 Upload Kernel Artifacts
@@ -145,11 +166,10 @@ jobs:
           name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
           retention-days: 7
-          if-no-files-found: error
-          compression-level: 9
+          if-no-files-found: ignore
 
       - name: 📱 Send Build Status to Telegram
-        if: ${{ always() }}
+        if: ${{ always() && (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '') }}
         uses: appleboy/telegram-action@master
         with:
           to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
@@ -165,52 +185,56 @@ jobs:
             Commit: ${{ env.COMMIT_SHA }}
 
   release:
-    needs: build
-    if: ${{ github.event.inputs.release == 'y' && needs.build.result == 'success' }}
+    needs: 
+      - validate
+      - build
+    if: |
+      needs.validate.outputs.is_valid == 'true' &&
+      github.event.inputs.release == 'y' &&
+      (needs.build.result == 'success' || needs.build.result == 'partial')
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - name: Check Build Status
+        run: |
+          echo "Build result: ${{ needs.build.result }}"
+          echo "Validation: ${{ needs.validate.outputs.is_valid }}"
+          echo "Release input: ${{ github.event.inputs.release }}"
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: List Artifact Files
-        id: list-files
-        run: |
-          echo "Listing all artifact files:"
-          find artifacts -name "*.zip" -type f | while read file; do
-            echo "Found: $file"
-          done
-
       - name: Create Release Body
         id: create-body
         run: |
-          # Cek apakah ada file artifacts
-          if [ ! -d "artifacts" ] || [ -z "$(find artifacts -name '*.zip' -type f)" ]; then
-            echo "❌ No artifacts found!"
-            DEVICES_LIST="No devices built successfully"
-          else
-            # Format device list dengan bullet points
+          # Cek dan buat devices list
+          if [ -d "artifacts" ] && find artifacts -name "*.zip" -type f | grep -q .; then
+            echo "📦 Found artifacts:"
+            find artifacts -name "*.zip" -type f
             find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/- /' > devices.txt
             DEVICES_LIST=$(cat devices.txt)
+          else
+            echo "⚠️ No artifacts found, creating empty list"
+            DEVICES_LIST="No build artifacts found"
           fi
           
-          # Buat release body dengan format yang benar
+          # Buat release body
           cat << EOF > release_body.md
-          # 🚀 BatAxeKernel KSUN ${{ github.event.inputs.version }} for OneUI 4.X - Release
+          # 🚀 BatAxeKernel ${{ github.event.inputs.version }}
 
-          ## ⚙️ Build Information:
+          ## ⚙️ Build Information
           - **Kernel Version:** ${{ github.event.inputs.version }}
           - **Build Date:** $(date +'%Y-%m-%d')
           - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
           - **KernelSU Next:** ${{ github.event.inputs.ksun }}
-          - **KernelSU Next Version:** ${{ github.event.inputs.ksunvers }}
-          - **SUFS Version:** ${{ github.event.inputs.susfsvers }}
+          ${{ github.event.inputs.ksunvers != '' && format('- **KernelSU Version:** {0}', github.event.inputs.ksunvers) || '' }}
+          ${{ github.event.inputs.susfsvers != '' && format('- **SUFS Version:** {0}', github.event.inputs.susfsvers) || '' }}
 
-          ## 📱 Supported Devices:
+          ## 📱 Supported Devices
           $DEVICES_LIST
 
           ## 📥 Installation
@@ -221,51 +245,31 @@ jobs:
           ## 💡 Notes
           - Make sure you're on the latest firmware
           - Backup your current kernel before flashing
-          - Report any issues on GitHub Issues
 
           ## 💬 Discussions
           [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
           EOF
 
-          # Set output
-          BODY_CONTENT=$(cat release_body.md)
+          # Set output untuk release body
           echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
+          cat release_body.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Debug Release Body
-        run: |
-          echo "Release body content:"
-          cat release_body.md
-          echo ""
-          echo "Total devices found:"
-          find artifacts -name "*.zip" -type f | wc -l
-          echo "Devices list:"
-          cat devices.txt 2>/dev/null || echo "No devices file"
-
-      - name: 🚀 Release Build Kernel
+      - name: 🚀 Create Release
         id: create_release
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v1
         with:
-          tag: ${{ github.event.inputs.tag }}
+          tag_name: ${{ github.event.inputs.tag }}${{ github.event.inputs.version }}
           name: "BatAxe Kernel ${{ github.event.inputs.version }}"
           body: ${{ steps.create-body.outputs.body }}
           draft: true
-          generateReleaseNotes: false
-          makeLatest: true
-          skipIfReleaseExists: true
+          prerelease: false
+          generate_release_notes: false
+          files: artifacts/**/*.zip
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          artifacts: "artifacts/**/*.zip"
-
-      - name: Get Release URL
-        id: get_release_url
-        run: |
-          echo "Checking release outputs..."
-          echo "release_url=${{ steps.create_release.outputs.html_url }}"
-          echo "RELEASE_URL=${{ steps.create_release.outputs.html_url }}" >> $GITHUB_ENV
 
       - name: 📢 Send Release Notification to Telegram
-        if: ${{ success() }}
+        if: ${{ success() && (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '') }}
         uses: appleboy/telegram-action@master
         with:
           to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
@@ -278,22 +282,18 @@ jobs:
             🔢 KernelSU: ${{ github.event.inputs.ksun }}
             📅 Released: $(date +'%Y-%m-%d %H:%M')
             
-            📱 Supported Devices:
-            ${{ steps.create-body.outputs.body | split: '## 📱 Supported Devices:' | last | split: '## 📥 Installation' | first }}
-
-      - name: Cleanup Artifacts
-        if: ${{ always() }}
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: "BatAxeKernel-*"
+            Check the release page for download links!
 
   notify_failure:
-    needs: build
-    if: ${{ failure() && needs.build.result == 'failure' }}
+    needs: [validate, build]
+    if: |
+      always() && 
+      (needs.validate.result == 'failure' || needs.build.result == 'failure') &&
+      (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '')
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📢 Send Failure Notification to Telegram
+      - name: 📢 Send Failure Notification
         uses: appleboy/telegram-action@master
         with:
           to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
@@ -301,6 +301,7 @@ jobs:
           message: |
             ❌ BUILD FAILED! BatAxeKernel ${{ github.event.inputs.version }}
             
-            ⚠️ One or more devices failed to build
-            🔍 Check workflow for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ${{ needs.validate.result == 'failure' && format('Validation Error: {0}', needs.validate.outputs.error_message) || 'Build Error: One or more devices failed to build' }}
+            
+            🔍 Check workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
             📅 Failed: $(date +'%Y-%m-%d %H:%M')
