@@ -55,21 +55,21 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           message: |
-            🚀 *BatAxeKernel Manual Notification*
+            🚀 BatAxeKernel Manual Notification
             
-            📊 *Build Information:*
-            ⚙️ *Version:* ${{ github.event.inputs.version }}
-            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
-            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
-            📱 *Devices Built:* ${{ github.event.inputs.device_count }}
-            ✅ *Status:* ${{ github.event.inputs.build_status }}
+            📊 Build Information:
+            ⚙️ Version: ${{ github.event.inputs.version }}
+            🔧 Toolchain: Clang ${{ github.event.inputs.llvm }}
+            🛠️ KernelSU: ${{ github.event.inputs.ksun }}
+            📱 Devices Built: ${{ github.event.inputs.device_count }}
+            ✅ Status: ${{ github.event.inputs.build_status }}
             
-            📥 *Download Links:*
-            🔗 [GitHub Release](https://github.com/papaL3xa/BatAxeKernel/releases/tag/${{ github.event.inputs.release_url }})
+            📥 Download Links:
+            🔗 GitHub Release: https://github.com/papaL3xa/BatAxeKernel/releases/tag/${{ github.event.inputs.release_url }}
             
-            💬 *Support & Discussion:*
-            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            💬 Support & Discussion:
+            👥 Telegram Group: https://t.me/PapaL3xaKernel/2
             
-            🏷️ *Tags:* #BatAxeKernel #ManualNotification
-          parse_mode: "HTML"
+            🏷️ Tags: #BatAxeKernel #ManualNotification
+          format: html
           disable_web_page_preview: true
