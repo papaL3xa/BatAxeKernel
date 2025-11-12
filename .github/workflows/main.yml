@@ -132,26 +132,35 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: BatAxeKernel-*
+          merge-multiple: true
 
-      - name: List Artifact Files
-        id: list-files
+      - name: Debug Artifact Structure
         run: |
-          echo "Listing all artifact files:"
-          find artifacts -name "*.zip" -type f | while read file; do
-            echo "Found: $file"
-          done
+          echo "📁 Artifact structure:"
+          find artifacts -type f -name "*.zip" | sort
+          echo ""
+          echo "📊 Total artifacts:"
+          find artifacts -name "*.zip" -type f | wc -l
 
       - name: Create Release Body
         id: create-body
         run: |
-          # Cek apakah ada file artifacts
-          if [ ! -d "artifacts" ] || [ -z "$(find artifacts -name '*.zip' -type f)" ]; then
-            echo "❌ No artifacts found!"
-            DEVICES_LIST="No devices built successfully"
-          else
+          # Set BUILD_DATE untuk job release
+          BUILD_DATE=$(date +'%Y%m%d')
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          
+          # Cari file zip di semua subdirectory
+          if find artifacts -name "*.zip" -type f | grep -q .; then
+            echo "✅ Artifacts found!"
             # Format device list dengan bullet points
             find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/- /' > devices.txt
             DEVICES_LIST=$(cat devices.txt)
+            ARTIFACT_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+            echo "Found $ARTIFACT_COUNT artifacts"
+          else
+            echo "❌ No artifacts found!"
+            DEVICES_LIST="No devices built successfully"
           fi
           
           # Buat release body dengan format yang benar
@@ -189,15 +198,10 @@ jobs:
           echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Debug Release Body
-        run: |
-          echo "Release body content:"
+          # Debug output
+          echo "=== RELEASE BODY CONTENT ==="
           cat release_body.md
-          echo ""
-          echo "Total devices found:"
-          find artifacts -name "*.zip" -type f | wc -l
-          echo "Devices list:"
-          cat devices.txt 2>/dev/null || echo "No devices file"
+          echo "=== END RELEASE BODY ==="
 
       - name: 🚀 Release Build Kernel
         id: create_release

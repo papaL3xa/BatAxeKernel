@@ -14,11 +14,11 @@ on:
       ksun:
         description: 'Install KernelSU-Next ?'
         required: true
-        default: 'y'
+        default: 'YES'
         type: choice
         options:
-          - 'y'
-          - 'n'
+          - 'YES'
+          - 'NO'
       ksunvers:
         description: 'KSUN Version (Leave Empty if None)'
         required: false
