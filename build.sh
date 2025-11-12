@@ -1,27 +1,41 @@
 #!/bin/bash
 
-separator ()
-{
-  echo "---------------------------------------------------------"
+# =============================================================================
+# KERNEL BUILD SCRIPT FOR EXYNOS 9820 DEVICES
+# Script ini digunakan untuk mengkompilasi kernel Android untuk perangkat Samsung Exynos 9820
+# =============================================================================
+
+# =============================================================================
+# FUNGSI UTILITY
+# =============================================================================
+
+# Fungsi untuk menampilkan separator/pembatas
+separator() {
+    echo "---------------------------------------------------------"
 }
 
-quotes () 
-{
-  echo "-- $1..."
+# Fungsi untuk menampilkan pesan dengan format quotes
+quotes() {
+    echo "-- $1..."
 }
 
-noquotes () 
-{
-  echo "-- $1"
+# Fungsi untuk menampilkan pesan tanpa format quotes
+noquotes() {
+    echo "-- $1"
 }
 
-clean ()
-{
+# =============================================================================
+# FUNGSI CLEANUP
+# =============================================================================
+
+clean() {
     separator
     quotes "Cleanup Build Files"
 
+    # Menghapus file build dan konfigurasi sementara
     rm -rf o* .w* build/AIK/s* build/AIK/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
+    # Jika opsi clean diaktifkan, reset semua perubahan ke commit terakhir
     if [[ "$CLEAN" == "y" ]]; then
         separator
         quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
@@ -30,10 +44,15 @@ clean ()
     fi
 }
 
-abort ()
-{
+# =============================================================================
+# FUNGSI ERROR HANDLING
+# =============================================================================
+
+abort() {
+    # Kembali ke direktori sebelumnya
     cd -
 
+    # Jika running di local machine, lakukan cleanup
     if [[ "$LOCAL" == "y" ]]; then
         clean
     fi
@@ -45,8 +64,8 @@ abort ()
     exit -1
 }
 
-check () 
-{
+# Fungsi untuk mengecek status eksekusi perintah sebelumnya
+check() {
     if [ $? -eq 0 ]; then
         echo "-- Setup $1 Done!"
     else
@@ -55,137 +74,40 @@ check ()
     fi
 }
 
-submodule () {
+# =============================================================================
+# FUNGSI SETUP ENVIRONMENT
+# =============================================================================
+
+# Fungsi untuk update submodules
+submodule() {
     separator
     quotes "Fetch all Submodules Update"
 
+    git submodule init && git submodule update --remote
     git submodule update -f -q --init --recursive > /dev/null
     check "Submodules"
 }
 
-usage ()
-{
-    cat << EOF
-Usage: $(basename "$0") [options]
-Options:
-    -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
-    -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -h, --help             List all Build Script Command
-    -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
-EOF
-}
-
-USE_NEUTRON=false
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --model|-m)
-            MODEL="$2"
-            shift 2
-            ;;
-        --ksu|-k)
-            KSU_OPTION="$2"
-            shift 2
-            ;;
-        --ver|-v)
-            KERNEL_VERSION="$2"
-            shift 2
-            ;;
-        --rel|-r)
-            RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
-            shift 2
-            ;;
-        --help|-h)
-            usage
-            exit 1
-            ;;
-        --clean|-c)
-            CLEAN="$2"
-            shift 2
-            ;;
-        --llvm|-l)
-            USE_NEUTRON=true
-
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 18 ]]; then
-                USE_NEUTRON=false
-            fi
-
-            if [[ -n "$2" && "$2" != -* ]]; then
-                NEUTRON="$2"
-                shift 2
-            else
-                NEUTRON=10032024
-                shift
-            fi
-            ;;
-        *)\
-            usage
-            exit 1
-            ;;
-    esac
-done
-
-if [ -z $MODEL ]; then
-    MODEL=d2s
-fi
-
-KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
-case $MODEL in
-beyond0lte)
-    SOC=0
-    BOARD=SRPRI28A014KU
-;;
-beyond1lte)
-    SOC=0
-    BOARD=SRPRI28B014KU
-;;
-beyond2lte)
-    SOC=0
-    BOARD=SRPRI17C014KU
-;;
-beyondx)
-    SOC=0
-    BOARD=SRPSC04B011KU
-;;
-d1)
-    SOC=5
-    BOARD=SRPSD26B007KU
-;;
-d1xks)
-    SOC=5
-    BOARD=SRPSD23A002KU
-;;
-d2s)
-    SOC=5
-    BOARD=SRPSC14B007KU
-;;
-d2x)
-    SOC=5
-    BOARD=SRPSC14C007KU
-;;
-*)
-    usage
-    exit
-esac
-
-detect_env ()
-{
+# Fungsi untuk mendeteksi dan setup environment build
+detect_env() {
     # Set Build Variable
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/"
-    REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
-    export KBUILD_BUILD_USER=oItsMineZ
-    export KBUILD_BUILD_HOST=StardustKernel
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/"
+    REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/" 
+    KERNEL_NAME=BatAxeKernel
+    export KBUILD_BUILD_USER=papaL3xa
+    export KBUILD_BUILD_HOST=BatAxeKernel
 
+    # Tentukan device berdasarkan SOC
     if [[ "$SOC" == "5" ]]; then
         DEVICE=Note10
     else
         DEVICE=S10
     fi
 
+    # Cek apakah running di GitHub Actions atau local
     if [ ! -z $RELEASE ]; then
         quotes "Running on GitHub Actions"
         echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
@@ -194,6 +116,7 @@ detect_env ()
         LOCAL=y
     fi
 
+    # Set default value untuk variabel yang tidak ditentukan
     if [ -z $KERNEL_VERSION ]; then
         KERNEL_VERSION=Unofficial
     fi
@@ -208,14 +131,29 @@ detect_env ()
 
     separator
 
+    # Setup Android Image Kitchen
     if test -d "build/AIK"; then
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/StardustMod/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
+    # Setup ramdisk binary
+    setup_ramdisk
+
+    # Setup DTB build tools
+    setup_dtb_tools
+
+    # Setup module binary dan props
+    setup_module_files
+
+    check "Build Environment"
+}
+
+# Fungsi untuk setup ramdisk binary
+setup_ramdisk() {
     if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
         quotes "Ramdisk Binary Found!"
     else
@@ -242,7 +180,10 @@ detect_env ()
         curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
         check "Fstab for Exynos 982$SOC"
     fi
+}
 
+# Fungsi untuk setup DTB build tools
+setup_dtb_tools() {
     if test -f "build/mkdtimg"; then
         quotes "DTB Build Script Found!"
     else
@@ -258,28 +199,36 @@ detect_env ()
             mkdir -p build/dtconfigs
         fi
 
-        if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
-            quotes "Getting DTB Config for Exynos 982$SOC"
-            curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
-        fi
-
-        if ! test -f "build/dtconfig/$MODEL.cfg"; then
-            quotes "Getting DTB Config for $DEVICE ($MODEL)"
-
-            if [[ "$MODEL" == "d1xks" ]]; then
-                curl -LSs "${REPO_URL}toolchains/configs/d1x.cfg" -o build/dtconfigs/$MODEL.cfg
-            else
-                curl -LSs "${REPO_URL}toolchains/configs/$MODEL.cfg" -o build/dtconfigs/$MODEL.cfg
-            fi
-
-            if [[ "$MODEL" == "d2s" ]]; then
-                sed -i "s/d2/$MODEL/g" build/dtconfigs/$MODEL.cfg
-            fi
-        fi
-
+        download_dtb_configs
         check "DTB Config Directory"
     fi
+}
 
+# Fungsi untuk download DTB configs
+download_dtb_configs() {
+    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
+        quotes "Getting DTB Config for Exynos 982$SOC"
+        curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
+    fi
+
+    if ! test -f "build/dtconfig/$MODEL.cfg"; then
+        quotes "Getting DTB Config for $DEVICE ($MODEL)"
+
+        if [[ "$MODEL" == "d1xks" ]]; then
+            curl -LSs "${REPO_URL}toolchains/configs/d1x.cfg" -o build/dtconfigs/$MODEL.cfg
+        else
+            curl -LSs "${REPO_URL}toolchains/configs/$MODEL.cfg" -o build/dtconfigs/$MODEL.cfg
+        fi
+
+        # Patch untuk model d2s
+        if [[ "$MODEL" == "d2s" ]]; then
+            sed -i "s/d2/$MODEL/g" build/dtconfigs/$MODEL.cfg
+        fi
+    fi
+}
+
+# Fungsi untuk setup module files
+setup_module_files() {
     if ! test -f "build/module-binary"; then
         quotes "Getting Module Binary"
         curl -LSs "https://raw.githubusercontent.com/Zackptg5/MMT-Extended/refs/heads/master/META-INF/com/google/android/update-binary" -o build/module-binary
@@ -299,155 +248,198 @@ detect_env ()
     quotes "Getting Kernel Zip Script"
     curl -LOSs "${BUILD_URL}updater-script" && mv up* build
     check "Kernel Zip Script"
-
-    check "Build Environment"
 }
 
-toolchain ()
-{
+# =============================================================================
+# FUNGSI TOOLCHAIN SETUP
+# =============================================================================
+
+toolchain() {
     separator
     if [[ "$USE_NEUTRON" == "true" ]]; then
-        NEUTRON_DATE="=$NEUTRON"
-        KERNELCLANG=NeutronClang-$NEUTRON
-        CLANG_INFO="Neutron Clang ($NEUTRON)"
-        TOOLCHAIN_PATH="toolchain/neutron-$NEUTRON"
+        setup_neutron_clang
     else
-        if [[ "$LLVM" == "12" ]]; then
-            CLANG=416183b1 # Clang 12.0.7
-        elif [[ "$LLVM" == "13" ]]; then
-            CLANG=433403b # Clang 13.0.3
-        elif [[ "$LLVM" == "14" ]]; then
-            CLANG=450784 # Clang 14.0.3
-        elif [[ "$LLVM" == "15" ]]; then
-            CLANG=468909b # Clang 15.0.3
-        elif [[ "$LLVM" == "16" ]]; then
-            CLANG=475365b # Clang 16.0.2
-        elif [[ "$LLVM" == "17" ]]; then
-            CLANG=498229b # Clang 17.0.4
-        else
-            LLVM=18
-            CLANG=522817 # Clang 18.0.1
-        fi
-
-        KERNELCLANG=Clang$LLVM
-
-        if [[ "$LLVM" == "12" ]]; then
-            MINOR=".0.5"
-        elif [[ "$LLVM" == "13" ]] || [[ "$LLVM" == "14" ]] || [[ "$LLVM" == "15" ]]; then
-            MINOR=".0.3"
-        elif [[ "$LLVM" == "16" ]]; then
-            MINOR=".0.2"
-        elif [[ "$LLVM" == "17" ]]; then
-            MINOR=".0.4"
-        else
-            MINOR=".0.1"
-        fi
-
-        CLANG_VERSION="r$CLANG"
-        CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
-        TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
-        CLIB=":$CLANG_DIR/lib"
-        CARGS="
-            CC=clang \
-            READELF=$CLANG_DIR/bin/llvm-readelf \
-        "
+        setup_standard_clang
     fi
+}
+
+# Fungsi untuk setup Neutron Clang
+setup_neutron_clang() {
+    NEUTRON_DATE="=$NEUTRON"
+    KERNELCLANG=NeutronClang-$NEUTRON
+    CLANG_INFO="Neutron Clang ($NEUTRON)"
+    TOOLCHAIN_PATH="toolchain/neutron-$NEUTRON"
+    
+    quotes "Using $CLANG_INFO"
+    
+    if test -d "$TOOLCHAIN_PATH"; then
+        quotes "$CLANG_INFO Directory Found!"
+    else
+        rm -rf $TOOLCHAIN_PATH
+        mkdir -p $TOOLCHAIN_PATH
+        quotes "Downloading $CLANG_INFO"
+        separator
+        cd $TOOLCHAIN_PATH
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
+        
+        # Install file package jika belum ada
+        if ! test -f "/usr/bin/file"; then
+            separator
+            quotes "Installing File Package"
+            separator
+            sudo apt install -y file
+        fi
+        
+        separator
+        quotes "Patching glibc"
+        separator
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
+        cd $OLDPWD
+        separator
+        check "Neutron Clang"
+    fi
+    
+    setup_clang_environment
+}
+
+# Fungsi untuk setup standard Clang
+setup_standard_clang() {
+    set_clang_version
+    KERNELCLANG=Clang$LLVM
+    CLANG_VERSION="r$CLANG"
+    CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
+    TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
+
+    quotes "Using $CLANG_INFO"
 
     if test -d "$TOOLCHAIN_PATH"; then
         quotes "$CLANG_INFO Directory Found!"
     else
-        if [[ "$USE_NEUTRON" == "true" ]]; then
-            rm -rf $TOOLCHAIN_PATH
-            mkdir -p $TOOLCHAIN_PATH
-            quotes "Add $CLANG_INFO"
-            separator
-            cd $TOOLCHAIN_PATH
-            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S$NEUTRON_DATE
-            if ! test -f "/usr/bin/file"; then
-                separator
-                quotes "Installing File Package"
-                separator
-                sudo apt install -y file
-            fi
-            separator
-            quotes "Paching glibc"
-            separator
-            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") --patch=glibc
-            cd $OLDPWD
-            separator
-            check "Neutron Clang 18"
-        else
-            if [[ "$LLVM" == "12" ]]; then
-                HOST=hub # GitHub
-                ROM="ArrowOS-Devices" # ArrowOS
-            else
-                HOST=lab # GitLab
-                ROM=crdroidandroid # crDroid
-            fi
+        TOOLCHAIN_URL="https://git$HOST.com/$ROM/android_prebuilts_clang_host_linux-x86_clang-$CLANG_VERSION.git"
 
-            TOOLCHAIN_URL="https://git$HOST.com/$ROM/android_prebuilts_clang_host_linux-x86_clang-$CLANG_VERSION.git"
-
-            quotes "Add $CLANG_INFO as Submodule"
-            git submodule add -f -q "$TOOLCHAIN_URL" "$TOOLCHAIN_PATH" > /dev/null
-            check "clang-$CLANG_VERSION"
-        fi
+        quotes "Downloading $CLANG_INFO"
+        git submodule add -f -q "$TOOLCHAIN_URL" "$TOOLCHAIN_PATH" > /dev/null
+        check "clang-$CLANG_VERSION"
     fi
 
+    setup_clang_environment
+}
+
+# Fungsi untuk set versi Clang berdasarkan pilihan LLVM
+set_clang_version() {
+    case $LLVM in
+        12)
+            CLANG=416183b1 # Clang 12.0.7
+            MINOR=".0.5"
+            HOST=hub
+            ROM="ArrowOS-Devices"
+            ;;
+        13)
+            CLANG=433403b # Clang 13.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        14)
+            CLANG=450784 # Clang 14.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        15)
+            CLANG=468909b # Clang 15.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        16)
+            CLANG=475365b # Clang 16.0.2
+            MINOR=".0.2"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        17)
+            CLANG=498229b # Clang 17.0.4
+            MINOR=".0.4"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        18)
+            CLANG=522817 # Clang 18.0.1
+            MINOR=".0.1"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        19)
+            CLANG=536225 # Clang 19.0.1
+            MINOR=".0.1"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        20)
+            CLANG=547379 # Clang 20.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        21)
+            CLANG=563880 # Clang 21.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM="reaPeR1010"
+            ;;
+        *)
+            LLVM=21
+            CLANG=563880 # Clang 21.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM="reaPeR1010"
+            ;;
+    esac
+}
+
+# Fungsi untuk setup environment Clang
+setup_clang_environment() {
     ORIG_PATH=$PATH
     CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
-    PATH="$CLANG_DIR/bin$CLIB:$ORIG_PATH"
+    PATH="$CLANG_DIR/bin:$ORIG_PATH"
 
     ARGS="
         ARCH=arm64 O=out \
         LLVM=1 LLVM_IAS=1 \
-        $CARGS
+        CC=clang \
+        LD=ld.lld \
+        AR=llvm-ar \
+        NM=llvm-nm \
+        OBJCOPY=llvm-objcopy \
+        OBJDUMP=llvm-objdump \
+        STRIP=llvm-strip \
+        READELF=llvm-readelf \
+        OBJSIZE=llvm-size \
     "
 }
 
-kernelsu ()
-{
+# =============================================================================
+# FUNGSI KERNELSU SETUP
+# =============================================================================
+
+kernelsu() {
     separator
 
-    if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
-        quotes "Patching KernelSU to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/KernelSU.patch")
-        separator
-        check "KernelSU"
-    fi
-
-    if ! test -f "arch/arm64/configs/ksu-next.config"; then
-        quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
-        check "KernelSU Next Defconfig"
-    fi
-
+    # Setup KernelSU Next
     if ! test -d "drivers/kernelsu"; then
-        quotes "Add KernelSU Next as Submodule"
+        quotes "update KernelSU Next as Submodule"
         separator
 
-        if test -d "KernelSU-Next"; then
-            rm -rf Ke*
-        fi
-
-        git submodule add -f -q https://github.com/oItsMineZ/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/oItsMineZ/KernelSU-Next/next-susfs/kernel/setup.sh")
-        separator
-        check "KernelSU Next"
-    fi
-
-    if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
-        separator
-        quotes "Patching SuSFS to Kernel Tree"
-        separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/SuSFS.patch")
-        separator
-        check "SuSFS"
+     git submodule init && git submodule update --remote
     fi
 }
 
-kernel ()
-{
+# =============================================================================
+# FUNGSI BUILD KERNEL
+# =============================================================================
+
+kernel() {
     # Build Kernel Image
     separator
     noquotes "Fetch Kernel Info"
@@ -464,10 +456,10 @@ kernel ()
         noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
     fi
 
-    sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
-    sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
+    # Update kernel configuration
+    update_kernel_config
 
-    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG bataxe.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
@@ -486,12 +478,22 @@ kernel ()
     quotes "Finished Kernel Build!"
     separator
 
+    # Prepare output directory
     rm -rf build/out/$MODEL
     mkdir -p build/out/$MODEL
 }
 
-dtb ()
-{
+# Fungsi untuk update konfigurasi kernel
+update_kernel_config() {
+    sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+    sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
+}
+
+# =============================================================================
+# FUNGSI BUILD DTB/DTBO
+# =============================================================================
+
+dtb() {
     # Build DTB Image
     quotes "Building Device Tree Blob Image for Exynos 982$SOC"
     separator
@@ -506,8 +508,11 @@ dtb ()
     ./build/mkdtimg cfg_create build/out/$MODEL/dtbo_$MODEL.img build/dtconfigs/$MODEL.cfg -d out/arch/arm64/boot/dts/samsung
 }
 
-ramdisk ()
-{
+# =============================================================================
+# FUNGSI BUILD RAMDISK
+# =============================================================================
+
+ramdisk() {
     # Build Ramdisk
     separator
     quotes "Building Ramdisk"
@@ -516,6 +521,25 @@ ramdisk ()
     rm -rf build/AIK/s*
     mkdir -p build/AIK/split_img
     pushd build/AIK/split_img > /dev/null
+    
+    # Setup boot image components
+    setup_boot_image_components
+    
+    popd > /dev/null
+
+    # Create Boot Image
+    quotes "Calling Android Image Kitchen"
+    pushd build/AIK > /dev/null
+
+    # Create ramdisk directories
+    create_ramdisk_directories
+
+    ./mkimg
+    popd > /dev/null
+}
+
+# Fungsi untuk setup komponen boot image
+setup_boot_image_components() {
     mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
@@ -532,24 +556,22 @@ ramdisk ()
     echo -e "gzip" > boot.img-ramdiskcomp
     echo -e "0xf0000000" > boot.img-second_offset
     echo -e "0x00000100" > boot.img-tags_offset
-    popd > /dev/null
+}
 
-    # Create Boot Image
-    quotes "Calling Android Image Kitchen"
-    pushd build/AIK > /dev/null
-
+# Fungsi untuk membuat direktori ramdisk
+create_ramdisk_directories() {
     mkdir -p ramdisk/debug_ramdisk
     mkdir -p ramdisk/dev
     mkdir -p ramdisk/mnt
     mkdir -p ramdisk/proc
     mkdir -p ramdisk/sys
-
-    ./mkimg
-    popd > /dev/null
 }
 
-build_zip ()
-{
+# =============================================================================
+# FUNGSI BUILD FLASHABLE ZIP
+# =============================================================================
+
+build_zip() {
     # Build Zip
     separator
     quotes "Building Zip"
@@ -558,13 +580,37 @@ build_zip ()
     fi
 
     pushd build > /dev/null
+    
+    # Prepare zip structure
+    prepare_zip_structure
+    
+    # Copy files to zip directory
+    copy_files_to_zip
+    
+    # Create module zip
+    create_module_zip
+    
+    popd > /dev/null
+    
+    # Update updater script dengan informasi build
+    update_updater_script
+    
+    # Create final zip
+    create_final_zip
+}
+
+# Fungsi untuk mempersiapkan struktur zip
+prepare_zip_structure() {
     rm -rf out/$MODEL/zip
     mkdir -p export
     mkdir -p out/$MODEL/zip/module/common/
     mkdir -p out/$MODEL/zip/module/META-INF/com/google/android
     mkdir -p out/$MODEL/zip/META-INF/com/google/android
     mv AIK/image-new.img out/$MODEL/boot-patched.img
+}
 
+# Fungsi untuk menyalin file ke direktori zip
+copy_files_to_zip() {
     cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
     cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
     cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
@@ -575,18 +621,26 @@ build_zip ()
     mv system.prop out/$MODEL/zip/module/common/
     cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
     echo -e "#MAGISK" > out/$MODEL/zip/module/META-INF/com/google/android/updater-script
+}
 
+# Fungsi untuk membuat module zip
+create_module_zip() {
     cd out/$MODEL/zip/module
     zip -r ../module.zip .
     rm -rf out/$MODEL/zip/module
+}
 
-    popd > /dev/null
+# Fungsi untuk update updater script dengan informasi build
+update_updater_script() {
     sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
     sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+}
 
+# Fungsi untuk membuat final zip
+create_final_zip() {
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        sed -i "s/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-StardustKernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null
@@ -599,41 +653,182 @@ build_zip ()
     fi
 }
 
-# Main Function
-rm -rf ./build.log
-(
-    START=`date +%s`
+# =============================================================================
+# FUNGSI PARSING ARGUMEN
+# =============================================================================
 
-    separator
-    quotes "Preparing Build Environment"
+usage() {
+    cat << EOF
+Usage: $(basename "$0") [options]
+Options:
+    -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
+    -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
+    -h, --help             List all Build Script Command
+    -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
+    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+EOF
+}
 
-    detect_env
-    toolchain
-    pushd $(dirname "$0") > /dev/null
+# Fungsi untuk parsing argumen command line
+parse_arguments() {
+    USE_NEUTRON=false
 
-    if [[ "$LOCAL" == "y" ]]; then
-        submodule
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --model|-m)
+                MODEL="$2"
+                shift 2
+                ;;
+            --ksu|-k)
+                KSU_OPTION="$2"
+                shift 2
+                ;;
+            --ver|-v)
+                KERNEL_VERSION="$2"
+                shift 2
+                ;;
+            --rel|-r)
+                RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
+                shift 2
+                ;;
+            --help|-h)
+                usage
+                exit 1
+                ;;
+            --clean|-c)
+                CLEAN="$2"
+                shift 2
+                ;;
+            --llvm|-l)
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    LLVM="$2"
+                    shift 2
+                else
+                    LLVM=21
+                    shift
+                fi
+                
+                # Check if LLVM version is between 12-21
+                if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
+                    USE_NEUTRON=false
+                    echo "-- Using Clang $LLVM"
+                else
+                    USE_NEUTRON=true
+                    NEUTRON="${LLVM:-10032024}"
+                    echo "-- Using Neutron Clang ($NEUTRON)"
+                fi
+                ;;
+            *)
+                usage
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Fungsi untuk setup model dan SOC
+setup_model() {
+    if [ -z $MODEL ]; then
+        MODEL=d2s
     fi
 
-    if [[ "$KSU" == "y" ]]; then
-        KSU_NEXT=ksun.config
-        kernelsu
-    fi
+    KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
+    case $MODEL in
+    beyond0lte)
+        SOC=0
+        BOARD=SRPRI28A014KU
+    ;;
+    beyond1lte)
+        SOC=0
+        BOARD=SRPRI28B014KU
+    ;;
+    beyond2lte)
+        SOC=0
+        BOARD=SRPRI17C014KU
+    ;;
+    beyondx)
+        SOC=0
+        BOARD=SRPSC04B011KU
+    ;;
+    d1)
+        SOC=5
+        BOARD=SRPSD26B007KU
+    ;;
+    d1xks)
+        SOC=5
+        BOARD=SRPSD23A002KU
+    ;;
+    d2s)
+        SOC=5
+        BOARD=SRPSC14B007KU
+    ;;
+    d2x)
+        SOC=5
+        BOARD=SRPSC14C007KU
+    ;;
+    *)
+        usage
+        exit
+    esac
+}
 
-    kernel
-    dtb
-    ramdisk
-    build_zip
+# =============================================================================
+# FUNGSI MAIN
+# =============================================================================
 
-    if [[ "$LOCAL" == "y" ]]; then
-        clean
+main() {
+    # Setup logging
+    rm -rf ./build.log
+    
+    (
+        START=`date +%s`
+
         separator
-    fi
+        quotes "Preparing Build Environment"
 
-    END=`date +%s`
+        # Parse arguments dan setup environment
+        parse_arguments "$@"
+        setup_model
+        detect_env
+        toolchain
+        
+        # Change to script directory
+        pushd $(dirname "$0") > /dev/null
 
-    let "ELAPSED=$END-$START"
+        # Setup submodules jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            submodule
+        fi
 
-    quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
-    separator
-) 2>&1	| tee -a ./build.log
+        # Setup KernelSU jika diaktifkan
+        if [[ "$KSU" == "y" ]]; then
+            KSU_NEXT=ksu.config
+            kernelsu
+        fi
+
+        # Build process
+        kernel
+        dtb
+        ramdisk
+        build_zip
+
+        # Cleanup jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            clean
+            separator
+        fi
+
+        # Calculate and display build time
+        END=`date +%s`
+        let "ELAPSED=$END-$START"
+        quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
+        separator
+        
+    ) 2>&1 | tee -a ./build.log
+}
+
+# =============================================================================
+# EXECUTE MAIN FUNCTION
+# =============================================================================
+
+main "$@"
