@@ -7,109 +7,91 @@ on:
         description: 'Kernel Version'
         required: true
         type: string
-      tag:
-        description: 'Release Tag'
-        required: true
-        type: string
-      ksun:
-        description: 'Install KernelSU-Next ?'
-        required: true
-        type: string
-      ksunvers:
-        description: 'KSUN Version (Leave Empty if None)'
-        required: false
-        type: string
-        default: ''
-      susfsvers:
-        description: 'SUSFS Version (Leave Empty if None)'
-        required: false
-        type: string
-        default: ''
       llvm:
         description: 'Clang Version'
         required: true
         type: string
-      telegram_token:
-        description: 'Telegram Bot Token'
-        required: false
+      ksun:
+        description: 'KernelSU Status'
+        required: true
         type: string
-        default: ''
-      telegram_chat_id:
-        description: 'Telegram Chat ID'
-        required: false
+      release_url:
+        description: 'Release URL'
+        required: true
         type: string
-        default: ''
+      device_count:
+        description: 'Number of Devices Built'
+        required: true
+        type: string
+      build_status:
+        description: 'Build Status'
+        required: true
+        type: string
+        default: 'success'
 
 jobs:
-  telegram-release:
+  send-telegram-notification:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Download Latest Release Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: BatAxeKernel-*
-          merge-multiple: true
-          
-      - name: 📊 Count Artifacts
-        id: count-artifacts
-        run: |
-          ARTIFACT_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
-          echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
-          echo "Found $ARTIFACT_COUNT artifacts"
-          
-      - name: 📝 Create Telegram Message
-        id: create-message
-        run: |
-          # Get device list
-          ARTIFACT_COUNT=${{ steps.count-artifacts.outputs.artifact_count }}
-          if [ "$ARTIFACT_COUNT" -eq 0 ]; then
-            DEVICES_LIST="❌ No devices built successfully"
-          else
-            find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/• /' > devices.txt
-            DEVICES_LIST=$(cat devices.txt)
-          fi
-          
-          # Create Telegram message
-          cat << EOF > telegram_message.md
-          🚀 *BatAxeKernel KSUN ${{ github.event.inputs.version }} Released!*
-
-          *📋 Build Information:*
-          • *Version:* ${{ github.event.inputs.version }}
-          • *Build Date:* $(date +'%Y-%m-%d')
-          • *Toolchain:* Clang ${{ github.event.inputs.llvm }}
-          • *KernelSU Next:* ${{ github.event.inputs.ksun }}
-          • *KernelSU Version:* ${{ github.event.inputs.ksunvers }}
-          • *SUFS Version:* ${{ github.event.inputs.susfsvers }}
-
-          *📱 Supported Devices ($ARTIFACT_COUNT devices):*
-          $DEVICES_LIST
-
-          *📥 Download:*
-          [GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
-
-          *💬 Support Group:*
-          [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
-
-          _Note: Flash via custom recovery and backup your current kernel first!_
-          EOF
-          
-          MESSAGE_CONTENT=$(cat telegram_message.md)
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$MESSAGE_CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: 📤 Send Telegram Notification
+      - name: 📱 Send Telegram Notification
         uses: appleboy/telegram-action@master
         with:
-          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
-          message: ${{ steps.create-message.outputs.message }}
-          parse_mode: markdown
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            🚀 *BatAxeKernel Build Completed Successfully!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📱 *Devices Built:* ${{ github.event.inputs.device_count }}
+            ✅ *Status:* ✅ SUCCESS
+            
+            📥 *Download Links:*
+            🔗 [GitHub Release](${{ github.event.inputs.release_url }})
+            
+            💬 *Support & Discussion:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            ⚠️ *Notes:*
+            • Make sure you're on compatible firmware
+            • Backup before flashing
+            • Report issues on GitHub
+            
+            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4
+          format: markdown
+          disable_web_page_preview: true
 
-      - name: 🧹 Cleanup Downloaded Artifacts
-        if: always()
-        run: |
-          rm -rf artifacts
-          echo "Artifacts cleaned up"
+  send-telegram-notification-failure:
+    if: failure()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📱 Send Telegram Failure Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            ❌ *BatAxeKernel Build Failed!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📱 *Devices Built:* ${{ github.event.inputs.device_count }}
+            ❌ *Status:* ❌ FAILED
+            
+            🔍 *Troubleshooting:*
+            • Check GitHub Actions logs
+            • Verify build parameters
+            • Review kernel configuration
+            
+            💬 *Support:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            🏷️ *Tags:* #BatAxeKernel #BuildFailed
+          format: markdown
+          disable_web_page_preview: true

@@ -68,14 +68,6 @@ on:
         required: false
         default: ''
         type: string
-      send_telegram:
-        description: 'Send Telegram Notification?'
-        required: true
-        default: 'y'
-        type: choice
-        options:
-          - 'y'
-          - 'n'
 
 jobs:
   build:
@@ -132,35 +124,26 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: BatAxeKernel-*
-          merge-multiple: true
 
-      - name: Debug Artifact Structure
+      - name: List Artifact Files
+        id: list-files
         run: |
-          echo "📁 Artifact structure:"
-          find artifacts -type f -name "*.zip" | sort
-          echo ""
-          echo "📊 Total artifacts:"
-          find artifacts -name "*.zip" -type f | wc -l
+          echo "Listing all artifact files:"
+          find artifacts -name "*.zip" -type f | while read file; do
+            echo "Found: $file"
+          done
 
       - name: Create Release Body
         id: create-body
         run: |
-          # Set BUILD_DATE untuk job release
-          BUILD_DATE=$(date +'%Y%m%d')
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          
-          # Cari file zip di semua subdirectory
-          if find artifacts -name "*.zip" -type f | grep -q .; then
-            echo "✅ Artifacts found!"
+          # Cek apakah ada file artifacts
+          if [ ! -d "artifacts" ] || [ -z "$(find artifacts -name '*.zip' -type f)" ]; then
+            echo "❌ No artifacts found!"
+            DEVICES_LIST="No devices built successfully"
+          else
             # Format device list dengan bullet points
             find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/- /' > devices.txt
             DEVICES_LIST=$(cat devices.txt)
-            ARTIFACT_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
-            echo "Found $ARTIFACT_COUNT artifacts"
-          else
-            echo "❌ No artifacts found!"
-            DEVICES_LIST="No devices built successfully"
           fi
           
           # Buat release body dengan format yang benar
@@ -198,6 +181,16 @@ jobs:
           echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Debug Release Body
+        run: |
+          echo "Release body content:"
+          cat release_body.md
+          echo ""
+          echo "Total devices found:"
+          find artifacts -name "*.zip" -type f | wc -l
+          echo "Devices list:"
+          cat devices.txt 2>/dev/null || echo "No devices file"
+
       - name: 🚀 Release Build Kernel
         id: create_release
         uses: ncipollo/release-action@v1
@@ -217,28 +210,26 @@ jobs:
         with:
           name: "BatAxeKernel-*"
 
-  trigger-telegram:
-    needs: release
-    if: github.event.inputs.send_telegram == 'y'
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 🚀 Trigger Telegram Notification
-        uses: convictional/trigger-workflow-and-wait@v1.6.2
+      - name: 📱 Trigger Telegram Notification
+        uses: actions/github-script@v7
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          TOOLCHAIN: ${{ github.event.inputs.llvm }}
+          KERNELSU: ${{ github.event.inputs.ksun }}
+          DEVICE_COUNT: ${{ steps.list-files.outputs.device_count }}
         with:
-          owner: ${{ github.repository_owner }}
-          repo: ${{ github.event.repository.name }}
-          github_token: ${{ github.token }}
-          workflow_file_name: tele-notif.yml
-          wait_interval: 30
-          client_payload: |-
-            {
-              "version": "${{ github.event.inputs.version }}",
-              "tag": "${{ github.event.inputs.tag }}",
-              "ksun": "${{ github.event.inputs.ksun }}",
-              "ksunvers": "${{ github.event.inputs.ksunvers }}",
-              "susfsvers": "${{ github.event.inputs.susfsvers }}",
-              "llvm": "${{ github.event.inputs.llvm }}",
-              "telegram_token": "${{ github.event.inputs.telegram_token }}",
-              "telegram_chat_id": "${{ github.event.inputs.telegram_chat_id }}"
-            }
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'tele-notif.yml',
+              ref: context.ref,
+              inputs: {
+                version: process.env.RELEASE_VERSION,
+                llvm: process.env.TOOLCHAIN,
+                ksun: process.env.KERNELSU,
+                release_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${'${{ github.event.inputs.tag }}'}`,
+                device_count: process.env.DEVICE_COUNT || '8',
+                build_status: 'success'
+              }
+            })
