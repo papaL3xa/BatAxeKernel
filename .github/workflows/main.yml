@@ -118,6 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Download All Artifacts
@@ -132,6 +133,10 @@ jobs:
           find artifacts -name "*.zip" -type f | while read file; do
             echo "Found: $file"
           done
+          # Count devices and set output
+          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+          echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
+          echo "Total devices: $DEVICE_COUNT"
 
       - name: Create Release Body
         id: create-body
@@ -210,26 +215,33 @@ jobs:
         with:
           name: "BatAxeKernel-*"
 
-      - name: 📱 Trigger Telegram Notification
-        uses: actions/github-script@v7
-        env:
-          RELEASE_VERSION: ${{ github.event.inputs.version }}
-          TOOLCHAIN: ${{ github.event.inputs.llvm }}
-          KERNELSU: ${{ github.event.inputs.ksun }}
-          DEVICE_COUNT: ${{ steps.list-files.outputs.device_count }}
+      - name: 📱 Send Telegram Notification
+        uses: appleboy/telegram-action@master
         with:
-          script: |
-            github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'tele-notif.yml',
-              ref: context.ref,
-              inputs: {
-                version: process.env.RELEASE_VERSION,
-                llvm: process.env.TOOLCHAIN,
-                ksun: process.env.KERNELSU,
-                release_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${'${{ github.event.inputs.tag }}'}`,
-                device_count: process.env.DEVICE_COUNT || '8',
-                build_status: 'success'
-              }
-            })
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            🚀 *BatAxeKernel Build Completed Successfully!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📱 *Devices Built:* ${{ steps.list-files.outputs.device_count }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ✅ *Status:* ✅ SUCCESS
+            
+            📥 *Download Links:*
+            🔗 [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
+            
+            💬 *Support & Discussion:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            ⚠️ *Notes:*
+            • Make sure you're on compatible firmware
+            • Backup before flashing
+            • Report issues on GitHub
+            
+            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4
+          format: markdown
+          disable_web_page_preview: true
