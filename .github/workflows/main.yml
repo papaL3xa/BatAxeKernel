@@ -1,4 +1,4 @@
-name: Build and Release to GitHub
+name: Build (Release-Post Github)
 run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
@@ -106,7 +106,7 @@ jobs:
         run: |
           bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r ${{ github.event.inputs.release }}
 
-      - name: 🧩 Upload Kernel Artifacts
+      - name: 🧩 Upload Kernel
         uses: actions/upload-artifact@v4
         with:
           name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
@@ -121,12 +121,12 @@ jobs:
       actions: write
 
     steps:
-      - name: 📥 Download All Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: 📋 List Artifact Files
+      - name: List Artifact Files
         id: list-files
         run: |
           echo "Listing all artifact files:"
@@ -138,7 +138,7 @@ jobs:
           echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
           echo "Total devices: $DEVICE_COUNT"
 
-      - name: 📝 Create Release Body
+      - name: Create Release Body
         id: create-body
         run: |
           # Cek apakah ada file artifacts
@@ -186,7 +186,7 @@ jobs:
           echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: 🐛 Debug Release Body
+      - name: Debug Release Body
         run: |
           echo "Release body content:"
           cat release_body.md
@@ -196,43 +196,83 @@ jobs:
           echo "Devices list:"
           cat devices.txt 2>/dev/null || echo "No devices file"
 
-      - name: 🚀 Create GitHub Release
+      - name: 🚀 Release Build Kernel
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.event.inputs.tag }}${{ github.event.inputs.version }}
-          release_name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          tag: ${{ github.event.inputs.tag }}
+          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
           body: ${{ steps.create-body.outputs.body }}
-          draft: false
+          draft: true
           prerelease: false
-          generate_release_notes: false
-          make_latest: true
-          fail_on_unmatched_files: true
+          generateReleaseNotes: false
+          skipIfReleaseExists: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          files: |
-            artifacts/**/*.zip
+          artifacts: "artifacts/**/*.zip"
 
-      - name: 🧹 Cleanup Artifacts
-        if: always()
+      - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
           name: "BatAxeKernel-*"
 
-      - name: 📢 Send Telegram Notification
-        if: always() && github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != ''
-        run: |
-          RELEASE_URL="${{ steps.create_release.outputs.url }}"
-          MESSAGE="🚀 *BatAxe Kernel ${{ github.event.inputs.version }} Released!*
-          
-          📱 *Supported Devices:* ${{ steps.list-files.outputs.device_count }}
-          ⚙️ *Toolchain:* Clang ${{ github.event.inputs.llvm }}
-          🔧 *KernelSU:* ${{ github.event.inputs.ksun }}
-          
-          📥 Download: [GitHub Release]($RELEASE_URL)
-          
-          Build completed successfully! 🎉"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ github.event.inputs.telegram_token }}/sendMessage" \
-          -d chat_id="${{ github.event.inputs.telegram_chat_id }}" \
-          -d text="$MESSAGE" \
-          -d parse_mode="Markdown"
+      - name: 📱 Send Telegram Notification
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            🚀 *BatAxeKernel Build Completed Successfully!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📱 *Devices Built:* ${{ steps.list-files.outputs.device_count }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ✅ *Status:* ✅ SUCCESS
+            
+            📥 *Download Links:*
+            🔗 [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
+            
+            📁 *Workflow Details:*
+            🔄 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            💬 *Support & Discussion:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            ⚠️ *Notes:*
+            • Make sure you're on compatible firmware
+            • Backup before flashing
+            • Report issues on GitHub
+            
+            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4 #BuildSuccess
+          format: markdown
+          disable_web_page_preview: true
+
+      - name: ❌ Send Telegram Failure Notification
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            ❌ *BatAxeKernel Build Failed!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ❌ *Status:* ❌ FAILED
+            
+            🔍 *Troubleshooting:*
+            📁 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            📋 [Check Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            💬 *Support:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            🏷️ *Tags:* #BatAxeKernel #BuildFailed #NeedAttention
+          format: markdown
+          disable_web_page_preview: true
