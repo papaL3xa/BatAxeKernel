@@ -1,4 +1,4 @@
-name: Build (Release-Post Github)
+name: Build and Release to GitHub
 run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
@@ -106,7 +106,7 @@ jobs:
         run: |
           bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r ${{ github.event.inputs.release }}
 
-      - name: 🧩 Upload Kernel
+      - name: 🧩 Upload Kernel Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
@@ -121,12 +121,12 @@ jobs:
       actions: write
 
     steps:
-      - name: Download All Artifacts
+      - name: 📥 Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: List Artifact Files
+      - name: 📋 List Artifact Files
         id: list-files
         run: |
           echo "Listing all artifact files:"
@@ -138,7 +138,7 @@ jobs:
           echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
           echo "Total devices: $DEVICE_COUNT"
 
-      - name: Create Release Body
+      - name: 📝 Create Release Body
         id: create-body
         run: |
           # Cek apakah ada file artifacts
@@ -186,7 +186,7 @@ jobs:
           echo "$BODY_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Debug Release Body
+      - name: 🐛 Debug Release Body
         run: |
           echo "Release body content:"
           cat release_body.md
@@ -196,21 +196,43 @@ jobs:
           echo "Devices list:"
           cat devices.txt 2>/dev/null || echo "No devices file"
 
-      - name: 🚀 Release Build Kernel
+      - name: 🚀 Create GitHub Release
         id: create_release
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v1
         with:
-          tag: ${{ github.event.inputs.tag }}
-          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          tag_name: ${{ github.event.inputs.tag }}${{ github.event.inputs.version }}
+          release_name: "BatAxe Kernel ${{ github.event.inputs.version }}"
           body: ${{ steps.create-body.outputs.body }}
-          draft: true
-          generateReleaseNotes: false
-          makeLatest: true
-          skipIfReleaseExists: true
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          make_latest: true
+          fail_on_unmatched_files: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-          artifacts: "artifacts/**/*.zip"
+          files: |
+            artifacts/**/*.zip
 
-      - name: Cleanup Artifacts
+      - name: 🧹 Cleanup Artifacts
+        if: always()
         uses: geekyeggo/delete-artifact@v5
         with:
           name: "BatAxeKernel-*"
+
+      - name: 📢 Send Telegram Notification
+        if: always() && github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != ''
+        run: |
+          RELEASE_URL="${{ steps.create_release.outputs.url }}"
+          MESSAGE="🚀 *BatAxe Kernel ${{ github.event.inputs.version }} Released!*
+          
+          📱 *Supported Devices:* ${{ steps.list-files.outputs.device_count }}
+          ⚙️ *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+          🔧 *KernelSU:* ${{ github.event.inputs.ksun }}
+          
+          📥 Download: [GitHub Release]($RELEASE_URL)
+          
+          Build completed successfully! 🎉"
+          
+          curl -s -X POST "https://api.telegram.org/bot${{ github.event.inputs.telegram_token }}/sendMessage" \
+          -d chat_id="${{ github.event.inputs.telegram_chat_id }}" \
+          -d text="$MESSAGE" \
+          -d parse_mode="Markdown"

@@ -10,11 +10,25 @@ on:
       llvm:
         description: 'Clang Version'
         required: true
-        type: string
+        default: '10032024'
+        type: choice
+        options:
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+          - '19'
+          - '20'
+          - '21'
+          - '10032024'
       ksun:
         description: 'KernelSU Status'
         required: true
         type: string
+        default: 'YES'
       release_url:
         description: 'Release URL'
         required: true
@@ -23,6 +37,7 @@ on:
         description: 'Number of Devices Built'
         required: true
         type: string
+        default: '8 Devices'
       build_status:
         description: 'Build Status'
         required: true
@@ -37,8 +52,8 @@ jobs:
       - name: 📱 Send Manual Notification
         uses: appleboy/telegram-action@master
         with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
-          token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
           message: |
             🚀 *BatAxeKernel Manual Notification*
             
@@ -56,5 +71,5 @@ jobs:
             👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
             
             🏷️ *Tags:* #BatAxeKernel #ManualNotification
-          format: markdown
+          parse_mode: "Markdown"
           disable_web_page_preview: true
