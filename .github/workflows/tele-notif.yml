@@ -76,41 +76,58 @@ jobs:
         id: create-message
         run: |
           # Get device list
-          if [ ${{ steps.count-artifacts.outputs.artifact_count }} -eq 0 ]; then
+          ARTIFACT_COUNT=${{ steps.count-artifacts.outputs.artifact_count }}
+          if [ "$ARTIFACT_COUNT" -eq 0 ]; then
             DEVICES_LIST="❌ No devices built successfully"
           else
             find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/• /' > devices.txt
             DEVICES_LIST=$(cat devices.txt)
           fi
           
-          # Create Telegram message
-          cat << EOF > telegram_message.md
-          🚀 *BatAxeKernel KSUN ${{ github.event.inputs.version }} Released!*
+          # Create variables for message
+          VERSION="${{ github.event.inputs.version }}"
+          TAG="${{ github.event.inputs.tag }}"
+          LLVM="${{ github.event.inputs.llvm }}"
+          KSUN="${{ github.event.inputs.ksun }}"
+          KSUNVERS="${{ github.event.inputs.ksunvers }}"
+          SUSFSVERS="${{ github.event.inputs.susfsvers }}"
+          REPOSITORY="${{ github.repository }}"
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          
+          # Create Telegram message dengan format yang benar
+          cat << EOF > telegram_message.txt
+          🚀 *BatAxeKernel KSUN $VERSION Released\!*
 
           *📋 Build Information:*
-          • *Version:* ${{ github.event.inputs.version }}
-          • *Build Date:* $(date +'%Y-%m-%d')
-          • *Toolchain:* Clang ${{ github.event.inputs.llvm }}
-          • *KernelSU Next:* ${{ github.event.inputs.ksun }}
-          • *KernelSU Version:* ${{ github.event.inputs.ksunvers }}
-          • *SUFS Version:* ${{ github.event.inputs.susfsvers }}
+          • *Version:* $VERSION
+          • *Build Date:* $BUILD_DATE
+          • *Toolchain:* Clang $LLVM
+          • *KernelSU Next:* $KSUN
+          • *KernelSU Version:* $KSUNVERS
+          • *SUFS Version:* $SUSFSVERS
 
-          *📱 Supported Devices (${{ steps.count-artifacts.outputs.artifact_count }} devices):*
+          *📱 Supported Devices \($ARTIFACT_COUNT devices\):*
           $DEVICES_LIST
 
           *📥 Download:*
-          [GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
+          [GitHub Releases](https://github.com/$REPOSITORY/releases/tag/$TAG)
 
           *💬 Support Group:*
-          [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
+            [Join Telegram Discussion](https://t.me/PapaL3xaKernel/2)
 
-          _Note: Flash via custom recovery and backup your current kernel first!_
+          _Note: Flash via custom recovery and backup your current kernel first\!_
           EOF
           
-          MESSAGE_CONTENT=$(cat telegram_message.md)
+          # Read message content
+          MESSAGE_CONTENT=$(cat telegram_message.txt)
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo "$MESSAGE_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Debug: Tampilkan message yang akan dikirim
+          echo "=== TELEGRAM MESSAGE ==="
+          cat telegram_message.txt
+          echo "=== END MESSAGE ==="
 
       - name: 📤 Send Telegram Notification
         uses: appleboy/telegram-action@master
@@ -118,7 +135,7 @@ jobs:
           to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
           token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
           message: ${{ steps.create-message.outputs.message }}
-          parse_mode: markdown
+          parse_mode: MarkdownV2
 
       - name: 🧹 Cleanup Downloaded Artifacts
         if: always()
