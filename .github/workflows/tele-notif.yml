@@ -10,7 +10,7 @@ on:
       tags:
         description: 'Kernel Version'
         required: true
-        default: 'v3.0KSUN'
+        default: '3.0KSUN'
       llvm:
         description: 'LLVM Version'
         required: true
@@ -112,56 +112,51 @@ jobs:
           BUILD_DATE="${{ env.BUILD_DATE }}"
           DEVICE_COUNT="${{ steps.count_artifacts.outputs.device_count }}"
           
-          # Buat pesan Telegram dengan format HTML yang benar
-          MESSAGE="🚀 <b>BatAxeKernel KSUN ${VERSION} for OneUI 4.X - Released!</b>
+          # Buat pesan Telegram dengan format MarkdownV2 yang benar
+          MESSAGE="🚀 *BatAxeKernel KSUN ${VERSION} for OneUI 4\\.X \\- Released\\!*
           
-          ⚙️ <b>Build Information:</b>
-            • <b>Version:</b> ${VERSION}
-            • <b>Build Date:</b> ${BUILD_DATE}
-            • <b>Toolchain:</b> Clang ${TOOLCHAIN}
-            • <b>KernelSU Next:</b> ${KERNELSU}
-            • <b>KernelSU Next Version:</b> ${KSUNV}
-            • <b>SUFS Version:</b> ${SUSFSV}
-            • <b>Supported Devices:</b> ${DEVICE_COUNT} devices
+          ⚙️ *Build Information:*
+            • *Version:* ${VERSION}
+            • *Build Date:* ${BUILD_DATE}
+            • *Toolchain:* Clang ${TOOLCHAIN}
+            • *KernelSU Next:* ${KERNELSU}
+            • *KernelSU Next Version:* ${KSUNV}
+            • *SUFS Version:* ${SUSFSV}
+            • *Supported Devices:* ${DEVICE_COUNT} devices
 
-          <b>Device List:</b>
+            *Device List:*
             • Note10 Series: d1, d1xks, d2s, d2x
             • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
 
-          📥 <b>Download:</b> <a href=\"${RELEASE_URL}\">GitHub Release</a>
+            📥 *Download:* [GitHub Release](${RELEASE_URL})
 
-          💬 <b>Discussion Group:</b> <a href=\"https://t.me/PapaL3xaKernel/2\">JOIN OUR GROUP DISCUSSIONS</a>
+            💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t\\.me/PapaL3xaKernel/2)
 
-          🔧 <b>Note:</b> Flash via custom recovery and backup first!"
+            🔧 *Note:* Flash via custom recovery and backup first\\!"
 
           echo "Sending Telegram notification..."
           echo "Message length: ${#MESSAGE}"
           
-          # Encode URL untuk menghindari masalah karakter khusus
-          ENCODED_MESSAGE=$(echo "$MESSAGE" | sed 's/&/%26/g' | sed 's/"/%22/g' | sed "s/'/%27/g")
-          
-          # Kirim notifikasi menggunakan curl
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d "chat_id=${CHAT_ID}" \
-            -d "text=${ENCODED_MESSAGE}" \
-            -d "parse_mode=HTML" \
-            -d "disable_web_page_preview=true")
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
-          
-          echo "HTTP Status Code: $HTTP_CODE"
-          echo "Response: $RESPONSE_BODY"
-          
-          if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "✅ Telegram notification sent successfully"
-          else
-            echo "❌ Failed to send Telegram notification"
-            echo "Error details: $RESPONSE_BODY"
-            # Jangan exit dengan error agar workflow tetap berlanjut
-            echo "⚠️ Continuing workflow despite Telegram notification failure"
-          fi
+          # Fungsi untuk mengirim notifikasi dengan fallback
+          send_telegram_message() {
+            local parse_mode=$1
+            local message=$2
+            
+            RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -d chat_id="${CHAT_ID}" \
+              -d text="${message}" \
+              -d parse_mode="${parse_mode}" \
+              -d disable_web_page_preview="true")
+            
+            HTTP_CODE=${RESPONSE: -3}
+            RESPONSE_BODY=${RESPONSE%???}
+            
+            echo "Parse Mode: $parse_mode"
+            echo "HTTP Status Code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY"
+            
+            return $HTTP_CODE
+          }
 
       - name: Skip Telegram Notification
         if: steps.check_telegram.outputs.has_credentials == 'false'
