@@ -1,0 +1,227 @@
+name: Notify Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Kernel Version'
+        required: true
+        default: '3.0KSUN'
+      llvm:
+        description: 'LLVM Version'
+        required: true
+        default: '16'
+      ksun:
+        description: 'KernelSU Next'
+        required: true
+        default: 'y'
+      ksunvers:
+        description: 'KernelSU Next Version'
+        required: true
+        default: '12889'
+      susfsvers:
+        description: 'SUFS Version'
+        required: true
+        default: 'NO_SUSFS'
+      telegram_token:
+        description: 'Telegram Bot Token (optional)'
+        required: false
+      telegram_chat_id:
+        description: 'Telegram Chat ID (optional)'
+        required: false
+
+jobs:
+  build-and-notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up environment
+        run: |
+          echo "RELEASE_URL=https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Check Telegram Credentials
+        id: check_telegram
+        run: |
+          echo "Checking Telegram credentials..."
+          
+          # Cek input credentials
+          if [ -n "${{ github.event.inputs.telegram_token }}" ] && [ "${{ github.event.inputs.telegram_token }}" != "" ] && [ -n "${{ github.event.inputs.telegram_chat_id }}" ] && [ "${{ github.event.inputs.telegram_chat_id }}" != "" ]; then
+            echo "✅ Using input credentials"
+            echo "use_inputs=true" >> $GITHUB_OUTPUT
+            echo "has_credentials=true" >> $GITHUB_OUTPUT
+          # Cek secret credentials
+          elif [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ "${{ secrets.TELEGRAM_BOT_TOKEN }}" != "" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ] && [ "${{ secrets.TELEGRAM_CHAT_ID }}" != "" ]; then
+            echo "✅ Using secret credentials"
+            echo "use_secrets=true" >> $GITHUB_OUTPUT
+            echo "has_credentials=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No Telegram credentials available"
+            echo "use_inputs=false" >> $GITHUB_OUTPUT
+            echo "use_secrets=false" >> $GITHUB_OUTPUT
+            echo "has_credentials=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Debug Variables
+        run: |
+          echo "Release URL: ${{ env.RELEASE_URL }}"
+          echo "Version: ${{ github.event.inputs.version }}"
+          echo "Has credentials: ${{ steps.check_telegram.outputs.has_credentials }}"
+          echo "Use inputs: ${{ steps.check_telegram.outputs.use_inputs }}"
+          echo "Use secrets: ${{ steps.check_telegram.outputs.use_secrets }}"
+
+      - name: Count Artifact Files
+        id: count_artifacts
+        run: |
+          if [ -d "artifacts" ]; then
+            DEVICE_COUNT=$(find artifacts -name "*.zip" -type f 2>/dev/null | wc -l)
+          else
+            DEVICE_COUNT=0
+          fi
+          echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
+          echo "Found $DEVICE_COUNT device artifacts"
+
+      - name: Send Telegram Notification
+        if: steps.check_telegram.outputs.has_credentials == 'true'
+        run: |
+          # Set credentials berdasarkan sumber
+          if [ "${{ steps.check_telegram.outputs.use_inputs }}" == "true" ]; then
+            TELEGRAM_TOKEN="${{ github.event.inputs.telegram_token }}"
+            CHAT_ID="${{ github.event.inputs.telegram_chat_id }}"
+            echo "Using input credentials"
+          else
+            TELEGRAM_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+            CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+            echo "Using secret credentials"
+          fi
+
+          RELEASE_URL="${{ env.RELEASE_URL }}"
+          VERSION="${{ github.event.inputs.version }}"
+          TOOLCHAIN="${{ github.event.inputs.llvm }}"
+          KERNELSU="${{ github.event.inputs.ksun }}"
+          KSUNV="${{ github.event.inputs.ksunvers }}"
+          SUSFSV="${{ github.event.inputs.susfsvers }}"
+          BUILD_DATE="${{ env.BUILD_DATE }}"
+          DEVICE_COUNT="${{ steps.count_artifacts.outputs.device_count }}"
+          
+          # Buat pesan Telegram dengan format MarkdownV2 yang benar
+          MESSAGE="🚀 *BatAxeKernel KSUN ${VERSION} for OneUI 4\\.X \\- Released\\!*
+          
+          ⚙️ *Build Information:*
+            • *Version:* ${VERSION}
+            • *Build Date:* ${BUILD_DATE}
+            • *Toolchain:* Clang ${TOOLCHAIN}
+            • *KernelSU Next:* ${KERNELSU}
+            • *KernelSU Next Version:* ${KSUNV}
+            • *SUFS Version:* ${SUSFSV}
+            • *Supported Devices:* ${DEVICE_COUNT} devices
+
+            *Device List:*
+            • Note10 Series: d1, d1xks, d2s, d2x
+            • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+
+            📥 *Download:* [GitHub Release](${RELEASE_URL})
+
+            💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t\\.me/PapaL3xaKernel/2)
+
+            🔧 *Note:* Flash via custom recovery and backup first\\!"
+
+          echo "Sending Telegram notification..."
+          echo "Message length: ${#MESSAGE}"
+          
+          # Fungsi untuk mengirim notifikasi dengan fallback
+          send_telegram_message() {
+            local parse_mode=$1
+            local message=$2
+            
+            RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -d chat_id="${CHAT_ID}" \
+              -d text="${message}" \
+              -d parse_mode="${parse_mode}" \
+              -d disable_web_page_preview="true")
+            
+            HTTP_CODE=${RESPONSE: -3}
+            RESPONSE_BODY=${RESPONSE%???}
+            
+            echo "Parse Mode: $parse_mode"
+            echo "HTTP Status Code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY"
+            
+            return $HTTP_CODE
+          }
+
+          # Coba dengan MarkdownV2 terlebih dahulu
+          echo "Trying MarkdownV2..."
+          if send_telegram_message "MarkdownV2" "$MESSAGE"; then
+            echo "✅ Telegram notification sent successfully with MarkdownV2"
+          else
+            echo "❌ MarkdownV2 failed, trying HTML format..."
+            
+            # Buat pesan dengan format HTML
+            HTML_MESSAGE="🚀 <b>BatAxeKernel KSUN ${VERSION} for OneUI 4.X - Released!</b>
+            
+          ⚙️ <b>Build Information:</b>
+            • <b>Version:</b> ${VERSION}
+            • <b>Build Date:</b> ${BUILD_DATE}
+            • <b>Toolchain:</b> Clang ${TOOLCHAIN}
+            • <b>KernelSU Next:</b> ${KERNELSU}
+            • <b>KernelSU Next Version:</b> ${KSUNV}
+            • <b>SUFS Version:</b> ${SUSFSV}
+            • <b>Supported Devices:</b> ${DEVICE_COUNT} devices
+
+            <b>Device List:</b>
+            • Note10 Series: d1, d1xks, d2s, d2x
+            • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+
+            📥 <b>Download:</b> <a href=\"${RELEASE_URL}\">GitHub Release</a>
+
+            💬 <b>Discussion Group:</b> <a href=\"https://t.me/PapaL3xaKernel/2\">JOIN OUR GROUP DISCUSSIONS</a>
+
+            🔧 <b>Note:</b> Flash via custom recovery and backup first!"
+            
+            if send_telegram_message "HTML" "$HTML_MESSAGE"; then
+              echo "✅ Telegram notification sent successfully with HTML"
+            else
+              echo "❌ HTML failed, trying plain text..."
+              
+              # Buat pesan plain text sebagai fallback terakhir
+              PLAIN_MESSAGE="🚀 BatAxeKernel KSUN ${VERSION} for OneUI 4.X - Released!
+              
+            ⚙️ Build Information:
+              • Version: ${VERSION}
+              • Build Date: ${BUILD_DATE}
+              • Toolchain: Clang ${TOOLCHAIN}
+              • KernelSU Next: ${KERNELSU}
+              • KernelSU Next Version: ${KSUNV}
+              • SUFS Version: ${SUSFSV}
+              • Supported Devices: ${DEVICE_COUNT} devices
+
+            Device List:
+            • Note10 Series: d1, d1xks, d2s, d2x
+            • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+
+            📥 Download: ${RELEASE_URL}
+
+            💬 Discussion Group: https://t.me/PapaL3xaKernel/2
+
+            🔧 Note: Flash via custom recovery and backup first!"
+              
+              if send_telegram_message "None" "$PLAIN_MESSAGE"; then
+                echo "✅ Telegram notification sent successfully with plain text"
+              else
+                echo "❌ All Telegram notification attempts failed"
+                exit 1
+              fi
+            fi
+          fi
+
+      - name: Skip Telegram Notification
+        if: steps.check_telegram.outputs.has_credentials == 'false'
+        run: |
+          echo "⚠️ Skipping Telegram notification - no credentials provided"
+          echo "To enable Telegram notifications, set either:"
+          echo "1. telegram_token and telegram_chat_id as workflow inputs, OR"
+          echo "2. TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as repository secrets"
