@@ -30,7 +30,7 @@ on:
         type: string
         default: 'YES'
       release_url:
-        description: 'Release URL'
+        description: 'Tag Version'
         required: true
         type: string
       device_count:
