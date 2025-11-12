@@ -1,307 +1,126 @@
-name: Build (Release-Telegram)
-run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
+name: Build Kernel
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Memungkinkan trigger manual
     inputs:
-      version:
-        description: 'Kernel Version'
+      model:
+        description: 'Device Model'
         required: true
-        default: ''
-      tag:
-        description: 'Release Tag'
-        required: true
-        default: 'v'  
-      ksun:
-        description: 'Install KernelSU-Next ?'
-        required: true
-        default: 'y'
+        default: 'd2s'
         type: choice
         options:
-          - 'y'
-          - 'n'
-      ksunvers:
-        description: 'KSUN Version (Leave Empty if None)'
-        required: false
-        default: ''
-      susfsvers:
-        description: 'SUSFS Version (Leave Empty if None)'
-        required: false
-        default: '' 
-      release:
-        description: 'Release this Kernel ? (y: Release - n: CI)'
-        required: true
-        default: 'y'
-        type: choice
-        options:
-          - 'y'
-          - 'n'
+        - beyond0lte
+        - beyond1lte
+        - beyond2lte
+        - beyondx
+        - d1
+        - d1xks
+        - d2s
+        - d2x
       llvm:
-        description: 'Clang (12-18) (19-21:Potential bootloop on A12) or Neutron (10032024) Version'
+        description: 'Toolchain Version'
         required: true
-        default: '10032024'
+        default: '21'
+        type: string
+      ksu:
+        description: 'Include KernelSU'
+        required: true
+        default: 'y'
         type: choice
         options:
-          - '12'
-          - '13'
-          - '14'
-          - '15'
-          - '16'
-          - '17'
-          - '18'
-          - '19'
-          - '20'
-          - '21'
-          - '10032024'
-      token:
-        description: 'Token (Leave Empty to Use GitHub Token)'
-        required: false
-        default: ''
-        type: string
-      telegram_token:
-        description: 'Telegram Bot Token (Leave Empty to Use Secret Token)'
-        required: false
-        default: ''
-        type: string
-      telegram_chat_id:
-        description: 'Telegram Chat ID (Leave Empty to Use Secret Token)'
-        required: false
-        default: ''
-        type: string
+        - y
+        - n
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    outputs:
-      is_valid: ${{ steps.validation.outputs.is_valid }}
-      error_message: ${{ steps.validation.outputs.error_message }}
-    steps:
-      - name: 🔒 Validate Inputs
-        id: validation
-        run: |
-          # Validate version format
-          if ! echo "${{ github.event.inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
-            echo "❌ Invalid version format: ${{ github.event.inputs.version }}"
-            echo "is_valid=false" >> $GITHUB_OUTPUT
-            echo "error_message=Invalid version format" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          
-          # Validate LLVM version
-          valid_llvm="12 13 14 15 16 17 18 19 20 21 10032024"
-          if ! echo "$valid_llvm" | grep -wq "${{ github.event.inputs.llvm }}"; then
-            echo "❌ Invalid LLVM version: ${{ github.event.inputs.llvm }}"
-            echo "is_valid=false" >> $GITHUB_OUTPUT
-            echo "error_message=Invalid LLVM version" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          
-          echo "✅ Input validation passed"
-          echo "is_valid=true" >> $GITHUB_OUTPUT
-          echo "error_message=" >> $GITHUB_OUTPUT
-
   build:
-    needs: validate
-    if: needs.validate.outputs.is_valid == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    strategy:
-      matrix:
-        device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
-      fail-fast: false
-
-    steps:
-      - name: 📀 Checkout Tree
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: ⏰ Set Time Zone
-        run: |
-          sudo timedatectl set-timezone Asia/Jakarta
-
-      - name: 💾 Cache Build Dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache
-          key: ${{ runner.os }}-kernel-build-${{ hashFiles('build.sh') }}
-          restore-keys: |
-            ${{ runner.os }}-kernel-build-
-
-      - name: 🪡 Setup Build Environment
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq git file
-          
-      - name: 💼 Set Environment Variable
-        run: |
-          SHA=$(git rev-parse --short HEAD)
-          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
-          echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
-          echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
-     
-      - name: ⚙️ Setting Permission
-        run: |
-          chmod +x build.sh || echo "build.sh not found, continuing..."
-        
-      - name: 🏇🏻 Building Kernel
-        run: |
-          # Build command dengan error handling
-          if [ -f "build.sh" ]; then
-            bash build.sh -m ${{ matrix.device }} -v "$BUILD_KERNEL_VERSION" \
-            -k "${{ github.event.inputs.ksun }}" -l "${{ github.event.inputs.llvm }}" \
-            -r "${{ github.event.inputs.release }}" || exit 1
-          else
-            echo "❌ build.sh not found!"
-            exit 1
-          fi
-        timeout-minutes: 120
-
-      - name: 🧩 Upload Kernel Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
-          path: "build/export/*.zip"
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: 📱 Send Build Status to Telegram
-        if: ${{ always() && (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '') }}
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            🏗️ Build ${{ github.event.inputs.version }} - Device: ${{ matrix.device }}
-            
-            ⚙️ Toolchain: Clang ${{ github.event.inputs.llvm }}
-            📅 Build Date: ${{ env.BUILD_DATE }}
-            🔢 KernelSU: ${{ github.event.inputs.ksun }}
-            
-            Status: ${{ job.status }}
-            Commit: ${{ env.COMMIT_SHA }}
-
-  release:
-    needs: 
-      - validate
-      - build
-    if: |
-      needs.validate.outputs.is_valid == 'true' &&
-      github.event.inputs.release == 'y' &&
-      (needs.build.result == 'success' || needs.build.result == 'partial')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Check Build Status
-        run: |
-          echo "Build result: ${{ needs.build.result }}"
-          echo "Validation: ${{ needs.validate.outputs.is_valid }}"
-          echo "Release input: ${{ github.event.inputs.release }}"
-
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create Release Body
-        id: create-body
-        run: |
-          # Cek dan buat devices list
-          if [ -d "artifacts" ] && find artifacts -name "*.zip" -type f | grep -q .; then
-            echo "📦 Found artifacts:"
-            find artifacts -name "*.zip" -type f
-            find artifacts -name "*.zip" -type f -exec basename {} .zip \; | sort | sed 's/^/- /' > devices.txt
-            DEVICES_LIST=$(cat devices.txt)
-          else
-            echo "⚠️ No artifacts found, creating empty list"
-            DEVICES_LIST="No build artifacts found"
-          fi
-          
-          # Buat release body
-          cat << EOF > release_body.md
-          # 🚀 BatAxeKernel ${{ github.event.inputs.version }}
-
-          ## ⚙️ Build Information
-          - **Kernel Version:** ${{ github.event.inputs.version }}
-          - **Build Date:** $(date +'%Y-%m-%d')
-          - **Toolchain:** Clang ${{ github.event.inputs.llvm }}
-          - **KernelSU Next:** ${{ github.event.inputs.ksun }}
-          ${{ github.event.inputs.ksunvers != '' && format('- **KernelSU Version:** {0}', github.event.inputs.ksunvers) || '' }}
-          ${{ github.event.inputs.susfsvers != '' && format('- **SUFS Version:** {0}', github.event.inputs.susfsvers) || '' }}
-
-          ## 📱 Supported Devices
-          $DEVICES_LIST
-
-          ## 📥 Installation
-          1. Download the appropriate zip file for your device
-          2. Flash via custom recovery (TWRP/OrangeFox)
-          3. Reboot and enjoy!
-
-          ## 💡 Notes
-          - Make sure you're on the latest firmware
-          - Backup your current kernel before flashing
-
-          ## 💬 Discussions
-          [Join Telegram Discussion Group](https://t.me/PapaL3xaKernel/2)
-          EOF
-
-          # Set output untuk release body
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          cat release_body.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: 🚀 Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.tag }}${{ github.event.inputs.version }}
-          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
-          body: ${{ steps.create-body.outputs.body }}
-          draft: true
-          prerelease: false
-          generate_release_notes: false
-          files: artifacts/**/*.zip
-          token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
-
-      - name: 📢 Send Release Notification to Telegram
-        if: ${{ success() && (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '') }}
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            🎉 RELEASE SUCCESS! BatAxeKernel ${{ github.event.inputs.version }}
-            
-            📦 Release: ${{ steps.create_release.outputs.html_url }}
-            ⚙️ Toolchain: Clang ${{ github.event.inputs.llvm }}
-            🔢 KernelSU: ${{ github.event.inputs.ksun }}
-            📅 Released: $(date +'%Y-%m-%d %H:%M')
-            
-            Check the release page for download links!
-
-  notify_failure:
-    needs: [validate, build]
-    if: |
-      always() && 
-      (needs.validate.result == 'failure' || needs.build.result == 'failure') &&
-      (github.event.inputs.telegram_token != '' || secrets.TELEGRAM_BOT_TOKEN != '')
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📢 Send Failure Notification
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            ❌ BUILD FAILED! BatAxeKernel ${{ github.event.inputs.version }}
-            
-            ${{ needs.validate.result == 'failure' && format('Validation Error: {0}', needs.validate.outputs.error_message) || 'Build Error: One or more devices failed to build' }}
-            
-            🔍 Check workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            📅 Failed: $(date +'%Y-%m-%d %H:%M')
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libncurses-dev \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          bc \
+          curl \
+          git \
+          zip \
+          unzip
+        
+    - name: Make build.sh executable
+      run: chmod +x build.sh
+      
+    - name: Build Kernel
+      env:
+        RELEASE: y
+      run: |
+        ./build.sh \
+          --model ${{ github.event.inputs.model || 'd2s' }} \
+          --llvm ${{ github.event.inputs.llvm || '21' }} \
+          --ksu ${{ github.event.inputs.ksu || 'y' }} \
+          --ver "CI-${{ github.sha }}"
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-build-${{ github.event.inputs.model || 'd2s' }}
+        path: |
+          build/export/*.zip
+          build.log
+        retention-days: 7
+        
+    - name: Get build info
+      id: build_info
+      run: |
+        BUILD_FILE=$(ls build/export/*.zip 2>/dev/null | head -1)
+        if [ -n "$BUILD_FILE" ]; then
+          echo "build_file=$(basename $BUILD_FILE)" >> $GITHUB_OUTPUT
+          echo "build_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "build_exists=false" >> $GITHUB_OUTPUT
+        fi
+        
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && needs.build.outputs.build_exists == 'true'
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: kernel-build-*
+        path: artifacts
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: build-${{ github.event.inputs.model || 'd2s' }}-${{ github.run_id }}
+        release_name: "Kernel Build - ${{ github.event.inputs.model || 'd2s' }}"
+        body: |
+          Automated Kernel Build
+          - Model: ${{ github.event.inputs.model || 'd2s' }}
+          - Toolchain: ${{ github.event.inputs.llvm || '21' }}
+          - KernelSU: ${{ github.event.inputs.ksu || 'y' }}
+          - Commit: ${{ github.sha }}
+          - Build Date: ${{ github.event.head_commit.timestamp }}
+        files: |
+          artifacts/**/*.zip
+          artifacts/**/build.log
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
