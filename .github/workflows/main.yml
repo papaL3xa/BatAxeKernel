@@ -201,7 +201,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          name: "BatAxeKernel ${{ github.event.inputs.version }} for OneUI 4.X - Release"
           body: ${{ steps.create-body.outputs.body }}
           draft: true
           prerelease: false
@@ -222,7 +222,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN || github.event.inputs.telegram_token }}
           message: |
-            🚀 *BatAxeKernel Build Completed Successfully!*
+            🚀 *BatAxeKernel for OneUI 4.X - Release | Build Completed Successfully!*
             
             📊 *Build Information:*
             ⚙️ *Version:* ${{ github.event.inputs.version }}
