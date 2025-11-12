@@ -10,9 +10,10 @@ on:
       model:
         description: 'Device Model'
         required: true
-        default: 'd2s'
+        default: 'all'
         type: choice
         options:
+        - all
         - beyond0lte
         - beyond1lte
         - beyond2lte
@@ -21,8 +22,16 @@ on:
         - d1xks
         - d2s
         - d2x
-      llvm:
-        description: 'Toolchain Version'
+      toolchain:
+        description: 'Toolchain Type'
+        required: true
+        default: 'llvm'
+        type: choice
+        options:
+        - llvm
+        - neutron
+      toolchain_version:
+        description: 'Toolchain Version (LLVM: 12-21, Neutron: date)'
         required: true
         default: '21'
         type: string
@@ -34,10 +43,51 @@ on:
         options:
         - y
         - n
+      clean_build:
+        description: 'Clean Build'
+        required: true
+        default: 'n'
+        type: choice
+        options:
+        - y
+        - n
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          # Untuk build "all"
+          - model: all
+            devices: '["beyond0lte","beyond1lte","beyond2lte","beyondx","d1","d1xks","d2s","d2x"]'
+          # Individual devices
+          - model: beyond0lte
+            devices: '["beyond0lte"]'
+          - model: beyond1lte
+            devices: '["beyond1lte"]'
+          - model: beyond2lte
+            devices: '["beyond2lte"]'
+          - model: beyondx
+            devices: '["beyondx"]'
+          - model: d1
+            devices: '["d1"]'
+          - model: d1xks
+            devices: '["d1xks"]'
+          - model: d2s
+            devices: '["d2s"]'
+          - model: d2x
+            devices: '["d2x"]'
+    
+    # Hanya run job yang sesuai dengan input model
+    if: |
+      github.event_name == 'push' || 
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && (
+        matrix.model == 'all' && github.event.inputs.model == 'all' ||
+        matrix.model == github.event.inputs.model
+      ))
     
     steps:
     - name: Checkout repository
@@ -60,45 +110,93 @@ jobs:
           curl \
           git \
           zip \
-          unzip
+          unzip \
+          file
         
     - name: Make build.sh executable
       run: chmod +x build.sh
       
-    - name: Build Kernel
+    - name: Parse devices to build
+      id: devices
+      run: |
+        if [ "${{ github.event.inputs.model }}" = "all" ] || [ "${{ matrix.model }}" = "all" ]; then
+          DEVICES='["beyond0lte","beyond1lte","beyond2lte","beyondx","d1","d1xks","d2s","d2x"]'
+        else
+          DEVICES='["${{ github.event.inputs.model || matrix.model }}"]'
+        fi
+        echo "devices=$DEVICES" >> $GITHUB_OUTPUT
+        echo "Building for devices: $DEVICES"
+        
+    - name: Build Kernel for Multiple Devices
       env:
         RELEASE: y
       run: |
-        ./build.sh \
-          --model ${{ github.event.inputs.model || 'd2s' }} \
-          --llvm ${{ github.event.inputs.llvm || '21' }} \
-          --ksu ${{ github.event.inputs.ksu || 'y' }} \
-          --ver "CI-${{ github.sha }}"
+        DEVICES=${{ steps.devices.outputs.devices }}
+        echo "Devices to build: $DEVICES"
+        
+        # Convert JSON array to bash array
+        DEVICES_ARRAY=$(echo "$DEVICES" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed 's/,/ /g')
+        
+        for DEVICE in $DEVICES_ARRAY; do
+          echo "=========================================="
+          echo "Building for device: $DEVICE"
+          echo "=========================================="
+          
+          # Set toolchain parameter berdasarkan pilihan
+          if [ "${{ github.event.inputs.toolchain }}" = "neutron" ]; then
+            TOOLCHAIN_PARAM="${{ github.event.inputs.toolchain_version || '10032024' }}"
+          else
+            TOOLCHAIN_PARAM="${{ github.event.inputs.toolchain_version || '21' }}"
+          fi
+          
+          # Build command
+          BUILD_CMD="./build.sh --model $DEVICE --llvm '$TOOLCHAIN_PARAM' --ksu ${{ github.event.inputs.ksu || 'y' }} --ver 'CI-${{ github.sha }}'"
+          
+          # Tambahkan clean option jika dipilih
+          if [ "${{ github.event.inputs.clean_build }}" = "y" ]; then
+            BUILD_CMD="$BUILD_CMD --clean y"
+          fi
+          
+          echo "Build command: $BUILD_CMD"
+          eval $BUILD_CMD
+          
+          # Simpan artifact dengan nama yang berbeda per device
+          if [ -d "build/export" ]; then
+            mkdir -p build/artifacts
+            mv build/export/*.zip build/artifacts/ 2>/dev/null || true
+          fi
+        done
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-build-${{ github.event.inputs.model || 'd2s' }}
+        name: kernel-build-${{ matrix.model }}-${{ github.run_id }}
         path: |
-          build/export/*.zip
+          build/artifacts/*.zip
           build.log
         retention-days: 7
+        if-no-files-found: warn
         
     - name: Get build info
       id: build_info
       run: |
-        BUILD_FILE=$(ls build/export/*.zip 2>/dev/null | head -1)
-        if [ -n "$BUILD_FILE" ]; then
-          echo "build_file=$(basename $BUILD_FILE)" >> $GITHUB_OUTPUT
+        if ls build/artifacts/*.zip 1> /dev/null 2>&1; then
+          BUILD_FILES=$(ls build/artifacts/*.zip | tr '\n' ' ')
+          echo "build_files=$BUILD_FILES" >> $GITHUB_OUTPUT
+          echo "build_count=$(ls build/artifacts/*.zip | wc -l)" >> $GITHUB_OUTPUT
           echo "build_exists=true" >> $GITHUB_OUTPUT
         else
           echo "build_exists=false" >> $GITHUB_OUTPUT
+          echo "build_count=0" >> $GITHUB_OUTPUT
         fi
         
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && needs.build.outputs.build_exists == 'true'
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      needs.build.result == 'success' &&
+      needs.build.outputs.build_exists == 'true'
     
     steps:
     - name: Download build artifacts
@@ -110,15 +208,25 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: build-${{ github.event.inputs.model || 'd2s' }}-${{ github.run_id }}
-        release_name: "Kernel Build - ${{ github.event.inputs.model || 'd2s' }}"
+        tag_name: build-${{ github.event.inputs.model || 'all' }}-${{ github.run_id }}
+        release_name: "Kernel Build - ${{ github.event.inputs.model || 'all' }}"
         body: |
           Automated Kernel Build
-          - Model: ${{ github.event.inputs.model || 'd2s' }}
-          - Toolchain: ${{ github.event.inputs.llvm || '21' }}
+          
+          **Build Parameters:**
+          - Model: ${{ github.event.inputs.model || 'all' }}
+          - Toolchain: ${{ github.event.inputs.toolchain || 'llvm' }} ${{ github.event.inputs.toolchain_version || '21' }}
           - KernelSU: ${{ github.event.inputs.ksu || 'y' }}
+          - Clean Build: ${{ github.event.inputs.clean_build || 'n' }}
+          
+          **Build Info:**
           - Commit: ${{ github.sha }}
           - Build Date: ${{ github.event.head_commit.timestamp }}
+          - Total Builds: ${{ needs.build.outputs.build_count }}
+          
+          **Supported Devices:**
+          - S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
+          - Note10 Series: d1, d1xks, d2s, d2x
         files: |
           artifacts/**/*.zip
           artifacts/**/build.log
