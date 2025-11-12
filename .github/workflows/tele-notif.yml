@@ -7,6 +7,10 @@ on:
         description: 'Kernel Version'
         required: true
         default: '3.0KSUN'
+      tags:
+        description: 'Kernel Version'
+        required: true
+        default: '3.0KSUN'
       llvm:
         description: 'LLVM Version'
         required: true
@@ -40,7 +44,7 @@ jobs:
 
       - name: Set up environment
         run: |
-          echo "RELEASE_URL=https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "RELEASE_URL=https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tags }}" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Check Telegram Credentials
@@ -69,6 +73,7 @@ jobs:
         run: |
           echo "Release URL: ${{ env.RELEASE_URL }}"
           echo "Version: ${{ github.event.inputs.version }}"
+          echo "Tags: ${{ github.event.inputs.tags }}"
           echo "Has credentials: ${{ steps.check_telegram.outputs.has_credentials }}"
           echo "Use inputs: ${{ steps.check_telegram.outputs.use_inputs }}"
           echo "Use secrets: ${{ steps.check_telegram.outputs.use_secrets }}"
@@ -152,71 +157,6 @@ jobs:
             
             return $HTTP_CODE
           }
-
-          # Coba dengan MarkdownV2 terlebih dahulu
-          echo "Trying MarkdownV2..."
-          if send_telegram_message "MarkdownV2" "$MESSAGE"; then
-            echo "✅ Telegram notification sent successfully with MarkdownV2"
-          else
-            echo "❌ MarkdownV2 failed, trying HTML format..."
-            
-            # Buat pesan dengan format HTML
-            HTML_MESSAGE="🚀 <b>BatAxeKernel KSUN ${VERSION} for OneUI 4.X - Released!</b>
-            
-          ⚙️ <b>Build Information:</b>
-            • <b>Version:</b> ${VERSION}
-            • <b>Build Date:</b> ${BUILD_DATE}
-            • <b>Toolchain:</b> Clang ${TOOLCHAIN}
-            • <b>KernelSU Next:</b> ${KERNELSU}
-            • <b>KernelSU Next Version:</b> ${KSUNV}
-            • <b>SUFS Version:</b> ${SUSFSV}
-            • <b>Supported Devices:</b> ${DEVICE_COUNT} devices
-
-            <b>Device List:</b>
-            • Note10 Series: d1, d1xks, d2s, d2x
-            • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-            📥 <b>Download:</b> <a href=\"${RELEASE_URL}\">GitHub Release</a>
-
-            💬 <b>Discussion Group:</b> <a href=\"https://t.me/PapaL3xaKernel/2\">JOIN OUR GROUP DISCUSSIONS</a>
-
-            🔧 <b>Note:</b> Flash via custom recovery and backup first!"
-            
-            if send_telegram_message "HTML" "$HTML_MESSAGE"; then
-              echo "✅ Telegram notification sent successfully with HTML"
-            else
-              echo "❌ HTML failed, trying plain text..."
-              
-              # Buat pesan plain text sebagai fallback terakhir
-              PLAIN_MESSAGE="🚀 BatAxeKernel KSUN ${VERSION} for OneUI 4.X - Released!
-              
-            ⚙️ Build Information:
-              • Version: ${VERSION}
-              • Build Date: ${BUILD_DATE}
-              • Toolchain: Clang ${TOOLCHAIN}
-              • KernelSU Next: ${KERNELSU}
-              • KernelSU Next Version: ${KSUNV}
-              • SUFS Version: ${SUSFSV}
-              • Supported Devices: ${DEVICE_COUNT} devices
-
-            Device List:
-            • Note10 Series: d1, d1xks, d2s, d2x
-            • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-            📥 Download: ${RELEASE_URL}
-
-            💬 Discussion Group: https://t.me/PapaL3xaKernel/2
-
-            🔧 Note: Flash via custom recovery and backup first!"
-              
-              if send_telegram_message "None" "$PLAIN_MESSAGE"; then
-                echo "✅ Telegram notification sent successfully with plain text"
-              else
-                echo "❌ All Telegram notification attempts failed"
-                exit 1
-              fi
-            fi
-          fi
 
       - name: Skip Telegram Notification
         if: steps.check_telegram.outputs.has_credentials == 'false'
