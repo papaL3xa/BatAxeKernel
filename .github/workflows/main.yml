@@ -77,6 +77,7 @@ jobs:
     strategy:
       matrix:
         device: [d1, d1xks, d2s, d2x, beyond0lte, beyond1lte, beyond2lte, beyondx]
+      fail-fast: false  # Biarkan device lain build meski satu gagal
 
     steps:
       - name: 📀 Checkout Tree
@@ -84,13 +85,41 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: 🔒 Validate Inputs
+        run: |
+          # Validate version format
+          if ! [[ "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "❌ Invalid version format"
+            exit 1
+          fi
+          
+          # Validate LLVM version
+          if [[ ! " 12 13 14 15 16 17 18 19 20 21 10032024 " =~ " ${{ github.event.inputs.llvm }} " ]]; then
+            echo "❌ Invalid LLVM version"
+            exit 1
+          fi
+          
+          echo "✅ Input validation passed"
+
       - name: ⏰ Set Time Zone
         run: |
           sudo timedatectl set-timezone Asia/Jakarta
 
+      - name: 💾 Cache Build Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache
+            build/**/*.o
+            build/**/*.d
+          key: ${{ runner.os }}-kernel-build-${{ hashFiles('build.sh', '**/*.mk', '**/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-build-
+
       - name: 🪡 Setup Build Environment
         run: |
-          sudo apt update && sudo apt upgrade -y && sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm curl jq git
           
       - name: 💼 Set Environment Variable
         run: |
@@ -98,23 +127,46 @@ jobs:
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "COMMIT_SHA=$SHA" >> $GITHUB_ENV
           echo "BUILD_KERNEL_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
      
       - name: ⚙️ Setting Permission
         run: chmod +x build.sh
         
       - name: 🏇🏻 Building Kernel
         run: |
-          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} -r ${{ github.event.inputs.release }}
+          bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} \
+          -k ${{ github.event.inputs.ksun }} -l ${{ github.event.inputs.llvm }} \
+          -r ${{ github.event.inputs.release }}
+        timeout-minutes: 120
 
-      - name: 🧩 Upload Kernel
+      - name: 🧩 Upload Kernel Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "BatAxeKernel-${{ env.BUILD_KERNEL_VERSION }}-${{ env.BUILD_DATE }}-${{ matrix.device }}-Clang${{ github.event.inputs.llvm }}"
           path: "build/export/*.zip"
+          retention-days: 7
           if-no-files-found: error
+          compression-level: 9
+
+      - name: 📱 Send Build Status to Telegram
+        if: ${{ always() }}
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🏗️ Build ${{ github.event.inputs.version }} - Device: ${{ matrix.device }}
+            
+            ⚙️ Toolchain: Clang ${{ github.event.inputs.llvm }}
+            📅 Build Date: ${{ env.BUILD_DATE }}
+            🔢 KernelSU: ${{ github.event.inputs.ksun }}
+            
+            Status: ${{ job.status }}
+            Commit: ${{ env.COMMIT_SHA }}
 
   release:
     needs: build
+    if: ${{ github.event.inputs.release == 'y' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -212,167 +264,43 @@ jobs:
           echo "release_url=${{ steps.create_release.outputs.html_url }}"
           echo "RELEASE_URL=${{ steps.create_release.outputs.html_url }}" >> $GITHUB_ENV
 
-      - name: Check Telegram Credentials
-        id: check_telegram
-        run: |
-          echo "Checking Telegram credentials..."
-          
-          # Cek input credentials
-          if [ -n "${{ github.event.inputs.telegram_token }}" ] && [ "${{ github.event.inputs.telegram_token }}" != "" ] && [ -n "${{ github.event.inputs.telegram_chat_id }}" ] && [ "${{ github.event.inputs.telegram_chat_id }}" != "" ]; then
-            echo "✅ Using input credentials"
-            echo "use_inputs=true" >> $GITHUB_OUTPUT
-            echo "has_credentials=true" >> $GITHUB_OUTPUT
-          # Cek secret credentials
-          elif [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ "${{ secrets.TELEGRAM_BOT_TOKEN }}" != "" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ] && [ "${{ secrets.TELEGRAM_CHAT_ID }}" != "" ]; then
-            echo "✅ Using secret credentials"
-            echo "use_secrets=true" >> $GITHUB_OUTPUT
-            echo "has_credentials=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ No Telegram credentials available"
-            echo "use_inputs=false" >> $GITHUB_OUTPUT
-            echo "use_secrets=false" >> $GITHUB_OUTPUT
-            echo "has_credentials=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Debug Variables
-        run: |
-          echo "Release URL: ${{ env.RELEASE_URL }}"
-          echo "Version: ${{ github.event.inputs.version }}"
-          echo "Has credentials: ${{ steps.check_telegram.outputs.has_credentials }}"
-          echo "Use inputs: ${{ steps.check_telegram.outputs.use_inputs }}"
-          echo "Use secrets: ${{ steps.check_telegram.outputs.use_secrets }}"
-
-      - name: Send Telegram Notification via Inputs
-        if: steps.check_telegram.outputs.use_inputs == 'true'
-        run: |
-          TELEGRAM_TOKEN="${{ github.event.inputs.telegram_token }}"
-          CHAT_ID="${{ github.event.inputs.telegram_chat_id }}"
-          RELEASE_URL="${{ env.RELEASE_URL }}"
-          VERSION="${{ github.event.inputs.version }}"
-          TOOLCHAIN="${{ github.event.inputs.llvm }}"
-          KERNELSU="${{ github.event.inputs.ksun }}"
-          KSUNV="${{ github.event.inputs.ksunvers }}"
-          SUSFSV="${{ github.event.inputs.susfsvers }}"
-          BUILD_DATE=$(date +'%Y-%m-%d')
-          
-          # Hitung jumlah device
-          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f 2>/dev/null | wc -l)
-          
-          # Buat pesan Telegram dengan format yang benar
-          MESSAGE="🚀 *BatAxeKernel KSUN $VERSION for OneUI 4.X - Released!*
-
-          ⚙️ *Build Information:*
-          • *Version:* $VERSION
-          • *Build Date:* $BUILD_DATE
-          • *Toolchain:* Clang $TOOLCHAIN
-          • *KernelSU Next:* $KERNELSU
-          • *KernelSU Next Version:* $KSUNV
-          • *SUFS Version:* $SUSFSV
-          • *Supported Devices:* $DEVICE_COUNT devices
-
-          *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
-
-          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
-
-          🔧 *Note:* Flash via custom recovery and backup first!"
-
-          echo "Sending Telegram notification with input credentials..."
-          echo "Message length: ${#MESSAGE}"
-          
-          # Kirim pesan ke Telegram dengan error handling
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" \
-            -d text="$MESSAGE" \
-            -d parse_mode="Markdown" \
-            -d disable_web_page_preview="true")
-          
-          HTTP_CODE=${RESPONSE: -3}
-          RESPONSE_BODY=${RESPONSE%???}
-          
-          echo "Telegram API Response: $RESPONSE_BODY"
-          echo "HTTP Status Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Failed to send Telegram notification"
-            exit 1
-          else
-            echo "✅ Telegram notification sent successfully"
-          fi
-
-      - name: Send Telegram Notification via Secrets
-        if: steps.check_telegram.outputs.use_secrets == 'true'
-        run: |
-          TELEGRAM_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-          RELEASE_URL="${{ env.RELEASE_URL }}"
-          VERSION="${{ github.event.inputs.version }}"
-          TOOLCHAIN="${{ github.event.inputs.llvm }}"
-          KERNELSU="${{ github.event.inputs.ksun }}"
-          KSUNV="${{ github.event.inputs.ksunvers }}"
-          SUSFSV="${{ github.event.inputs.susfsvers }}"
-          BUILD_DATE=$(date +'%Y-%m-%d')
-          
-          # Hitung jumlah device
-          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f 2>/dev/null | wc -l)
-          
-          # Buat pesan Telegram dengan format yang benar
-          MESSAGE="🚀 *BatAxeKernel KSUN $VERSION for OneUI 4.X - Released!*
-
-          ⚙️ *Build Information:*
-          • *Version:* $VERSION
-          • *Build Date:* $BUILD_DATE
-          • *Toolchain:* Clang $TOOLCHAIN
-          • *KernelSU Next:* $KERNELSU
-          • *KernelSU Next Version:* $KSUNV
-          • *SUFS Version:* $SUSFSV
-          • *Supported Devices:* $DEVICE_COUNT devices
-
-          *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
-
-          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
-
-          🔧 *Note:* Flash via custom recovery and backup first!"
-
-          echo "Sending Telegram notification with secret credentials..."
-          echo "Message length: ${#MESSAGE}"
-          
-          # Kirim pesan ke Telegram dengan error handling
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" \
-            -d text="$MESSAGE" \
-            -d parse_mode="Markdown" \
-            -d disable_web_page_preview="true")
-          
-          HTTP_CODE=${RESPONSE: -3}
-          RESPONSE_BODY=${RESPONSE%???}
-          
-          echo "Telegram API Response: $RESPONSE_BODY"
-          echo "HTTP Status Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Failed to send Telegram notification"
-            exit 1
-          else
-            echo "✅ Telegram notification sent successfully"
-          fi
-
-      - name: Skip Telegram Notification
-        if: steps.check_telegram.outputs.has_credentials == 'false'
-        run: |
-          echo "⚠️ Skipping Telegram notification - no credentials provided"
-          echo "To enable Telegram notifications, set either:"
-          echo "1. telegram_token and telegram_chat_id as workflow inputs, OR"
-          echo "2. TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as repository secrets"
+      - name: 📢 Send Release Notification to Telegram
+        if: ${{ success() }}
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🎉 RELEASE SUCCESS! BatAxeKernel ${{ github.event.inputs.version }}
+            
+            📦 Release: ${{ steps.create_release.outputs.html_url }}
+            ⚙️ Toolchain: Clang ${{ github.event.inputs.llvm }}
+            🔢 KernelSU: ${{ github.event.inputs.ksun }}
+            📅 Released: $(date +'%Y-%m-%d %H:%M')
+            
+            📱 Supported Devices:
+            ${{ steps.create-body.outputs.body | split: '## 📱 Supported Devices:' | last | split: '## 📥 Installation' | first }}
 
       - name: Cleanup Artifacts
+        if: ${{ always() }}
         uses: geekyeggo/delete-artifact@v5
         with:
           name: "BatAxeKernel-*"
+
+  notify_failure:
+    needs: build
+    if: ${{ failure() && needs.build.result == 'failure' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📢 Send Failure Notification to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ github.event.inputs.telegram_chat_id != '' && github.event.inputs.telegram_chat_id || secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_token || secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ❌ BUILD FAILED! BatAxeKernel ${{ github.event.inputs.version }}
+            
+            ⚠️ One or more devices failed to build
+            🔍 Check workflow for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            📅 Failed: $(date +'%Y-%m-%d %H:%M')
