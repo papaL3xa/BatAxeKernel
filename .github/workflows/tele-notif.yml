@@ -71,5 +71,5 @@ jobs:
             👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
             
             🏷️ *Tags:* #BatAxeKernel #ManualNotification
-          parse_mode: "Markdown"
+          parse_mode: "HTML"
           disable_web_page_preview: true
