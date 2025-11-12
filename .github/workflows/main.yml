@@ -216,6 +216,7 @@ jobs:
           name: "BatAxeKernel-*"
 
       - name: 📱 Send Telegram Notification
+        if: success()
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
@@ -234,6 +235,9 @@ jobs:
             📥 *Download Links:*
             🔗 [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
             
+            📁 *Workflow Details:*
+            🔄 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
             💬 *Support & Discussion:*
             👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
             
@@ -242,6 +246,33 @@ jobs:
             • Backup before flashing
             • Report issues on GitHub
             
-            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4
+            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4 #BuildSuccess
+          format: markdown
+          disable_web_page_preview: true
+
+      - name: ❌ Send Telegram Failure Notification
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            ❌ *BatAxeKernel Build Failed!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ❌ *Status:* ❌ FAILED
+            
+            🔍 *Troubleshooting:*
+            📁 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            📋 [Check Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            💬 *Support:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            🏷️ *Tags:* #BatAxeKernel #BuildFailed #NeedAttention
           format: markdown
           disable_web_page_preview: true

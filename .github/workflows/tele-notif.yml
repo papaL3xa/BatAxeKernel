@@ -28,73 +28,9 @@ on:
         required: true
         type: string
         default: 'success'
-  workflow_run:
-    workflows: ["Build (Release-Post Github)"]
-    types:
-      - completed
-    branches: [main, master]
 
 jobs:
-  send-success-notification:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📱 Send Success Notification
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            🎉 *Build Automation Completed!*
-            
-            ✅ *Workflow Status:* SUCCESS
-            📝 *Workflow:* ${{ github.event.workflow_run.name }}
-            🔄 *Run ID:* ${{ github.event.workflow_run.id }}
-            ⏰ *Finished At:* ${{ github.event.workflow_run.updated_at }}
-            
-            📊 *Details:*
-            📁 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})
-            📦 [View Releases](https://github.com/${{ github.repository }}/releases)
-            
-            💬 *Support:*
-            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
-            
-            🏷️ *Tags:* #CI #Success #Automation
-          format: markdown
-          disable_web_page_preview: true
-
-  send-failure-notification:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📱 Send Failure Notification
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            ❌ *Build Automation Failed!*
-            
-            🔥 *Workflow Status:* FAILED
-            📝 *Workflow:* ${{ github.event.workflow_run.name }}
-            🔄 *Run ID:* ${{ github.event.workflow_run.id }}
-            ⏰ *Finished At:* ${{ github.event.workflow_run.updated_at }}
-            
-            🔍 *Troubleshooting:*
-            📁 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})
-            📋 [Check Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})
-            
-            💬 *Support:*
-            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
-            
-            🏷️ *Tags:* #CI #Failed #NeedAttention
-          format: markdown
-          disable_web_page_preview: true
-
   send-manual-notification:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     
     steps:
@@ -104,7 +40,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
           token: ${{ secrets.TELEGRAM_TOKEN || github.event.inputs.telegram_token }}
           message: |
-            🚀 *BatAxeKernel Build Notification*
+            🚀 *BatAxeKernel Manual Notification*
             
             📊 *Build Information:*
             ⚙️ *Version:* ${{ github.event.inputs.version }}
@@ -119,11 +55,6 @@ jobs:
             💬 *Support & Discussion:*
             👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
             
-            ⚠️ *Notes:*
-            • Make sure you're on compatible firmware
-            • Backup before flashing
-            • Report issues on GitHub
-            
-            🏷️ *Tags:* #BatAxeKernel #KernelSU #Notification
+            🏷️ *Tags:* #BatAxeKernel #ManualNotification
           format: markdown
           disable_web_page_preview: true
