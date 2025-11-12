@@ -53,7 +53,7 @@ jobs:
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
             🚀 BatAxeKernel Manual Notification
             
