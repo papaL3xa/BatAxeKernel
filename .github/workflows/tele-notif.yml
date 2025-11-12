@@ -65,7 +65,7 @@ jobs:
             ✅ *Status:* ${{ github.event.inputs.build_status }}
             
             📥 *Download Links:*
-            🔗 [GitHub Release](${{ github.event.inputs.release_url }})
+            🔗 [GitHub Release](https://github.com/papaL3xa/BatAxeKernel/releases/tag/${{ github.event.inputs.release_url }})
             
             💬 *Support & Discussion:*
             👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
