@@ -1,4 +1,4 @@
-name: Build (Release-Telegram)
+name: Build (Release-Post Github)
 run-name: 'Release: Build ${{ github.event.inputs.version }} with CLANG-${{ github.event.inputs.llvm }}'
 
 on:
@@ -118,6 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Download All Artifacts
@@ -132,6 +133,10 @@ jobs:
           find artifacts -name "*.zip" -type f | while read file; do
             echo "Found: $file"
           done
+          # Count devices and set output
+          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f | wc -l)
+          echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
+          echo "Total devices: $DEVICE_COUNT"
 
       - name: Create Release Body
         id: create-body
@@ -196,183 +201,78 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
-          name: "BatAxe Kernel ${{ github.event.inputs.version }}"
+          name: "BatAxeKernel ${{ github.event.inputs.version }} for OneUI 4.X - Release"
           body: ${{ steps.create-body.outputs.body }}
           draft: true
+          prerelease: false
           generateReleaseNotes: false
-          makeLatest: true
           skipIfReleaseExists: true
           token: ${{ github.event.inputs.token != '' && github.event.inputs.token || github.token }}
           artifacts: "artifacts/**/*.zip"
-
-      - name: Get Release URL
-        id: get_release_url
-        run: |
-          echo "Checking release outputs..."
-          echo "release_url=${{ steps.create_release.outputs.html_url }}"
-          echo "RELEASE_URL=${{ steps.create_release.outputs.html_url }}" >> $GITHUB_ENV
-
-      - name: Check Telegram Credentials
-        id: check_telegram
-        run: |
-          echo "Checking Telegram credentials..."
-          
-          # Cek input credentials
-          if [ -n "${{ github.event.inputs.telegram_token }}" ] && [ "${{ github.event.inputs.telegram_token }}" != "" ] && [ -n "${{ github.event.inputs.telegram_chat_id }}" ] && [ "${{ github.event.inputs.telegram_chat_id }}" != "" ]; then
-            echo "✅ Using input credentials"
-            echo "use_inputs=true" >> $GITHUB_OUTPUT
-            echo "has_credentials=true" >> $GITHUB_OUTPUT
-          # Cek secret credentials
-          elif [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ "${{ secrets.TELEGRAM_BOT_TOKEN }}" != "" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ] && [ "${{ secrets.TELEGRAM_CHAT_ID }}" != "" ]; then
-            echo "✅ Using secret credentials"
-            echo "use_secrets=true" >> $GITHUB_OUTPUT
-            echo "has_credentials=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ No Telegram credentials available"
-            echo "use_inputs=false" >> $GITHUB_OUTPUT
-            echo "use_secrets=false" >> $GITHUB_OUTPUT
-            echo "has_credentials=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Debug Variables
-        run: |
-          echo "Release URL: ${{ env.RELEASE_URL }}"
-          echo "Version: ${{ github.event.inputs.version }}"
-          echo "Has credentials: ${{ steps.check_telegram.outputs.has_credentials }}"
-          echo "Use inputs: ${{ steps.check_telegram.outputs.use_inputs }}"
-          echo "Use secrets: ${{ steps.check_telegram.outputs.use_secrets }}"
-
-      - name: Send Telegram Notification via Inputs
-        if: steps.check_telegram.outputs.use_inputs == 'true'
-        run: |
-          TELEGRAM_TOKEN="${{ github.event.inputs.telegram_token }}"
-          CHAT_ID="${{ github.event.inputs.telegram_chat_id }}"
-          RELEASE_URL="${{ env.RELEASE_URL }}"
-          VERSION="${{ github.event.inputs.version }}"
-          TOOLCHAIN="${{ github.event.inputs.llvm }}"
-          KERNELSU="${{ github.event.inputs.ksun }}"
-          KSUNV="${{ github.event.inputs.ksunvers }}"
-          SUSFSV="${{ github.event.inputs.susfsvers }}"
-          BUILD_DATE=$(date +'%Y-%m-%d')
-          
-          # Hitung jumlah device
-          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f 2>/dev/null | wc -l)
-          
-          # Buat pesan Telegram dengan format yang benar
-          MESSAGE="🚀 *BatAxeKernel KSUN $VERSION for OneUI 4.X - Released!*
-
-          ⚙️ *Build Information:*
-          • *Version:* $VERSION
-          • *Build Date:* $BUILD_DATE
-          • *Toolchain:* Clang $TOOLCHAIN
-          • *KernelSU Next:* $KERNELSU
-          • *KernelSU Next Version:* $KSUNV
-          • *SUFS Version:* $SUSFSV
-          • *Supported Devices:* $DEVICE_COUNT devices
-
-          *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
-
-          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
-
-          🔧 *Note:* Flash via custom recovery and backup first!"
-
-          echo "Sending Telegram notification with input credentials..."
-          echo "Message length: ${#MESSAGE}"
-          
-          # Kirim pesan ke Telegram dengan error handling
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" \
-            -d text="$MESSAGE" \
-            -d parse_mode="Markdown" \
-            -d disable_web_page_preview="true")
-          
-          HTTP_CODE=${RESPONSE: -3}
-          RESPONSE_BODY=${RESPONSE%???}
-          
-          echo "Telegram API Response: $RESPONSE_BODY"
-          echo "HTTP Status Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Failed to send Telegram notification"
-            exit 1
-          else
-            echo "✅ Telegram notification sent successfully"
-          fi
-
-      - name: Send Telegram Notification via Secrets
-        if: steps.check_telegram.outputs.use_secrets == 'true'
-        run: |
-          TELEGRAM_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-          RELEASE_URL="${{ env.RELEASE_URL }}"
-          VERSION="${{ github.event.inputs.version }}"
-          TOOLCHAIN="${{ github.event.inputs.llvm }}"
-          KERNELSU="${{ github.event.inputs.ksun }}"
-          KSUNV="${{ github.event.inputs.ksunvers }}"
-          SUSFSV="${{ github.event.inputs.susfsvers }}"
-          BUILD_DATE=$(date +'%Y-%m-%d')
-          
-          # Hitung jumlah device
-          DEVICE_COUNT=$(find artifacts -name "*.zip" -type f 2>/dev/null | wc -l)
-          
-          # Buat pesan Telegram dengan format yang benar
-          MESSAGE="🚀 *BatAxeKernel KSUN $VERSION for OneUI 4.X - Released!*
-
-          ⚙️ *Build Information:*
-          • *Version:* $VERSION
-          • *Build Date:* $BUILD_DATE
-          • *Toolchain:* Clang $TOOLCHAIN
-          • *KernelSU Next:* $KERNELSU
-          • *KernelSU Next Version:* $KSUNV
-          • *SUFS Version:* $SUSFSV
-          • *Supported Devices:* $DEVICE_COUNT devices
-
-          *Device List:*
-          • Note10 Series: d1, d1xks, d2s, d2x
-          • S10 Series: beyond0lte, beyond1lte, beyond2lte, beyondx
-
-          📥 *Download:* [GitHub Release]($RELEASE_URL)
-
-          💬 *Discussion Group:* [JOIN OUR GROUP DISCUSSIONS](https://t.me/PapaL3xaKernel/2)
-
-          🔧 *Note:* Flash via custom recovery and backup first!"
-
-          echo "Sending Telegram notification with secret credentials..."
-          echo "Message length: ${#MESSAGE}"
-          
-          # Kirim pesan ke Telegram dengan error handling
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" \
-            -d text="$MESSAGE" \
-            -d parse_mode="Markdown" \
-            -d disable_web_page_preview="true")
-          
-          HTTP_CODE=${RESPONSE: -3}
-          RESPONSE_BODY=${RESPONSE%???}
-          
-          echo "Telegram API Response: $RESPONSE_BODY"
-          echo "HTTP Status Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Failed to send Telegram notification"
-            exit 1
-          else
-            echo "✅ Telegram notification sent successfully"
-          fi
-
-      - name: Skip Telegram Notification
-        if: steps.check_telegram.outputs.has_credentials == 'false'
-        run: |
-          echo "⚠️ Skipping Telegram notification - no credentials provided"
-          echo "To enable Telegram notifications, set either:"
-          echo "1. telegram_token and telegram_chat_id as workflow inputs, OR"
-          echo "2. TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as repository secrets"
 
       - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
           name: "BatAxeKernel-*"
+
+      - name: 📱 Send Telegram Notification
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            🚀 *BatAxeKernel for OneUI 4.X - Release | Build Completed Successfully!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📱 *Devices Built:* ${{ steps.list-files.outputs.device_count }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ✅ *Status:* ✅ SUCCESS
+            
+            📥 *Download Links:*
+            🔗 [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag }})
+            
+            📁 *Workflow Details:*
+            🔄 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            💬 *Support & Discussion:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            ⚠️ *Notes:*
+            • Make sure you're on compatible firmware
+            • Backup before flashing
+            • Report issues on GitHub
+            
+            🏷️ *Tags:* #BatAxeKernel #KernelSU #OneUI4 #BuildSuccess
+          format: markdown
+          disable_web_page_preview: true
+
+      - name: ❌ Send Telegram Failure Notification
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID || github.event.inputs.telegram_chat_id }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN || github.event.inputs.telegram_token }}
+          message: |
+            ❌ *BatAxeKernel Build Failed!*
+            
+            📊 *Build Information:*
+            ⚙️ *Version:* ${{ github.event.inputs.version }}
+            🔧 *Toolchain:* Clang ${{ github.event.inputs.llvm }}
+            🛠️ *KernelSU:* ${{ github.event.inputs.ksun }}
+            📅 *Build Date:* $(date +'%Y-%m-%d %H:%M')
+            ❌ *Status:* ❌ FAILED
+            
+            🔍 *Troubleshooting:*
+            📁 [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            📋 [Check Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            💬 *Support:*
+            👥 [Telegram Group](https://t.me/PapaL3xaKernel/2)
+            
+            🏷️ *Tags:* #BatAxeKernel #BuildFailed #NeedAttention
+          format: markdown
+          disable_web_page_preview: true
