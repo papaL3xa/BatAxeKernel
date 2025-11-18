@@ -53,21 +53,6 @@ on:
           - '20'
           - '21'
           - '10032024'
-      token:
-        description: 'Token (Leave Empty to Use GitHub Token)'
-        required: false
-        default: ''
-        type: string
-      telegram_token:
-        description: 'Telegram Bot Token (Leave Empty to Use Secret Token)'
-        required: false
-        default: ''
-        type: string
-      telegram_chat_id:
-        description: 'Telegram Chat ID (Leave Empty to Use Secret Token)'
-        required: false
-        default: ''
-        type: string
 
 jobs:
   build:
