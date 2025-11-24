@@ -107,7 +107,7 @@ while [[ $# -gt 0 ]]; do
         --llvm|-l)
             USE_NEUTRON=true
 
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 18 ]]; then
+            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
                 USE_NEUTRON=false
             fi
 
@@ -115,7 +115,7 @@ while [[ $# -gt 0 ]]; do
                 NEUTRON="$2"
                 shift 2
             else
-                NEUTRON=10032024
+                NEUTRON=42069420
                 shift
             fi
             ;;
@@ -175,10 +175,11 @@ detect_env ()
     separator
 
     DATE=`date +"%Y%m%d"`
-    BUILD_URL="https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/"
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/"
     REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/"
-    export KBUILD_BUILD_USER=oItsMineZ
-    export KBUILD_BUILD_HOST=StardustKernel
+    KERNEL_NAME=BatAxe
+    export KBUILD_BUILD_USER=papaL3xa
+    export KBUILD_BUILD_HOST=BatAxeKernel
 
     if [[ "$SOC" == "5" ]]; then
         DEVICE=Note10
@@ -212,7 +213,7 @@ detect_env ()
         quotes "Android Image Kitchen Directory Found!"
     else
         quotes "Add Android Image Kitchen as Submodule"
-        git submodule add -f -q https://github.com/StardustMod/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
         check "Android Image Kitchen Directory"
     fi
 
@@ -324,9 +325,13 @@ toolchain ()
             CLANG=475365b # Clang 16.0.2
         elif [[ "$LLVM" == "17" ]]; then
             CLANG=498229b # Clang 17.0.4
-        else
-            LLVM=18
+        elif [[ "$LLVM" == "18" ]]; then
             CLANG=522817 # Clang 18.0.1
+        elif [[ "$LLVM" == "19" ]]; then
+            CLANG=547379 # Clang 19.0.1          
+        else
+            LLVM=20
+            CLANG=536225 # Clang 20.0.0
         fi
 
         KERNELCLANG=Clang$LLVM
@@ -362,7 +367,7 @@ toolchain ()
             quotes "Add $CLANG_INFO"
             separator
             cd $TOOLCHAIN_PATH
-            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S$NEUTRON_DATE
+            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
             if ! test -f "/usr/bin/file"; then
                 separator
                 quotes "Installing File Package"
@@ -372,7 +377,7 @@ toolchain ()
             separator
             quotes "Paching glibc"
             separator
-            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") --patch=glibc
+            bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
             cd $OLDPWD
             separator
             check "Neutron Clang 18"
@@ -411,14 +416,14 @@ kernelsu ()
     if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
         quotes "Patching KernelSU to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/KernelSU.patch")
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
         separator
         check "KernelSU"
     fi
 
-    if ! test -f "arch/arm64/configs/ksu-next.config"; then
+    if ! test -f "arch/arm64/configs/ksu.config"; then
         quotes "Getting KernelSU Next Defconfig"
-        curl -LSs "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
+        curl -LSs "https://raw.githubusercontent.com/papaL3xa/build/refs/heads/exynos9820/configs/$KSU_NEXT" -o arch/arm64/configs/$KSU_NEXT
         check "KernelSU Next Defconfig"
     fi
 
@@ -430,8 +435,8 @@ kernelsu ()
             rm -rf Ke*
         fi
 
-        git submodule add -f -q https://github.com/oItsMineZ/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/oItsMineZ/KernelSU-Next/next-susfs/kernel/setup.sh")
+        git submodule add -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
+        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
         separator
         check "KernelSU Next"
     fi
@@ -440,7 +445,7 @@ kernelsu ()
         separator
         quotes "Patching SuSFS to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/StardustMod/build/refs/heads/exynos9820/patches/SuSFS.patch")
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
         separator
         check "SuSFS"
     fi
@@ -464,7 +469,7 @@ kernel ()
         noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
     fi
 
-    sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+    sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
     DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
@@ -586,7 +591,7 @@ build_zip ()
     sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
 
     if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
-        sed -i "s/CONFIG_LOCALVERSION=\"-Stardust-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-StardustKernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME.Kernel-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
         NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
         NAME=${NAME:1}.zip
         pushd build/out/$MODEL/zip > /dev/null
@@ -616,7 +621,7 @@ rm -rf ./build.log
     fi
 
     if [[ "$KSU" == "y" ]]; then
-        KSU_NEXT=ksun.config
+        KSU_NEXT=ksu.config
         kernelsu
     fi
 
