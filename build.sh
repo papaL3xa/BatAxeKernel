@@ -89,7 +89,7 @@ submodule() {
 }
 
 # Fungsi untuk mendeteksi dan setup environment build
-detect_env() {a
+detect_env() {
     # Set Build Variable
     separator
 
