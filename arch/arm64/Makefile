@@ -1,286 +1,835 @@
-#
-# arch/arm64/Makefile
-#
-# This file is included by the global makefile so that you can add your own
-# architecture-specific flags and dependencies.
-#
-# This file is subject to the terms and conditions of the GNU General Public
-# License.  See the file "COPYING" in the main directory of this archive
-# for more details.
-#
-# Copyright (C) 1995-2001 by Russell King
+#!/bin/bash
 
-LDFLAGS_vmlinux	:=--no-undefined -X -z norelro
-CPPFLAGS_vmlinux.lds = -DTEXT_OFFSET=$(TEXT_OFFSET)
-GZFLAGS		:=-9
+# =============================================================================
+# KERNEL BUILD SCRIPT FOR EXYNOS 9820 DEVICES
+# Script ini digunakan untuk mengkompilasi kernel Android untuk perangkat Samsung Exynos 9820
+# =============================================================================
 
-ifeq ($(CONFIG_RELOCATABLE), y)
-# Pass --no-apply-dynamic-relocs to restore pre-binutils-2.27 behaviour
-# for relative relocs, since this leads to better Image compression
-# with the relocation offsets always being zero.
-LDFLAGS_vmlinux		+= -shared -Bsymbolic -z notext \
-			$(call ld-option, --no-apply-dynamic-relocs)
-endif
+# =============================================================================
+# FUNGSI UTILITY
+# =============================================================================
 
-ifeq ($(CONFIG_ARM64_ERRATUM_843419),y)
-  ifeq ($(call ld-option, --fix-cortex-a53-843419),)
-$(warning ld does not support --fix-cortex-a53-843419; kernel may be susceptible to erratum)
-  else
-    ifeq ($(call gold-ifversion, -lt, 114000000, y), y)
-$(warning This version of GNU gold may generate incorrect code with --fix-cortex-a53-843419;\
-	see https://sourceware.org/bugzilla/show_bug.cgi?id=21491)
-    endif
-LDFLAGS_vmlinux	+= --fix-cortex-a53-843419
-  endif
-else
-  ifeq ($(ld-name),gold)
-# Pass --no-fix-cortex-a53-843419 to ensure the erratum fix is disabled
-LDFLAGS	+= --no-fix-cortex-a53-843419
-  endif
-endif
+# Fungsi untuk menampilkan separator/pembatas
+separator() {
+    echo "---------------------------------------------------------"
+}
 
-KBUILD_DEFCONFIG := defconfig
+# Fungsi untuk menampilkan pesan dengan format quotes
+quotes() {
+    echo "-- $1..."
+}
 
-# Check for binutils support for specific extensions
-lseinstr := $(call as-instr,.arch_extension lse,-DCONFIG_AS_LSE=1)
+# Fungsi untuk menampilkan pesan tanpa format quotes
+noquotes() {
+    echo "-- $1"
+}
 
-ifeq ($(CONFIG_SEC_ARM64_LSE_ATOMICS),y)
-  ifeq ($(cc-name),clang)
-lseinstr := -DCONFIG_AS_LSE=1
-KBUILD_CFLAGS += -march=armv8-a+lse
-  endif
-endif
+# =============================================================================
+# FUNGSI CLEANUP
+# =============================================================================
 
-ifeq ($(CONFIG_ARM64_LSE_ATOMICS), y)
-  ifeq ($(lseinstr),)
-$(warning LSE atomics not supported by binutils)
-  endif
-endif
+clean() {
+    separator
+    quotes "Cleanup Build Files"
 
-ifeq ($(CONFIG_ARM64), y)
-brokengasinst := $(call as-instr,1:\n.inst 0\n.rept . - 1b\n\nnop\n.endr\n,,-DCONFIG_BROKEN_GAS_INST=1)
+    # Menghapus file build dan konfigurasi sementara
+    rm -rf o* .w* build/AIK/s* build/AIK/ramdisk/f* build/*.p* build/*er* arch/arm64/configs/k* && git restore arch/arm64/configs/$KERNEL_DEFCONFIG
 
-  ifneq ($(brokengasinst),)
-$(warning Detected assembler with broken .inst; disassembly will be unreliable)
-  endif
-endif
+    # Jika opsi clean diaktifkan, reset semua perubahan ke commit terakhir
+    if [[ "$CLEAN" == "y" ]]; then
+        separator
+        quotes "Revert all Change to Latest Commit (All Uncommit Change will Lost!)"
+        separator
+        rm -rf K* toolc* build/A* build/d* build/m* build/s* build/u* && git clean -df && git reset --hard HEAD
+    fi
+}
 
-ifeq ($(CONFIG_COMPAT_VDSO), y)
-  ifeq ($(LLVM_IAS),1)
-    export CONFIG_VDSO32 := y
-    vdso32 := -DCONFIG_VDSO32=1
-  else
-    CROSS_COMPILE_ARM32 ?= $(CONFIG_CROSS_COMPILE_ARM32:"%"=%)
+# =============================================================================
+# FUNGSI ERROR HANDLING
+# =============================================================================
 
-    # Check that the user has provided a valid prefix for the 32-bit toolchain.
-    # To prevent selecting the system $(cc-name) by default, the prefix is not
-    # allowed to be empty, unlike CROSS_COMPILE. In the unlikely event that the
-    # system $(cc-name) is actually the 32-bit ARM compiler to be used, the
-    # variable can be set to the dirname (e.g. CROSS_COMPILE_ARM32=/usr/bin/).
-    # Note: this Makefile is read both before and after regenerating the config
-    # (if needed). Any warning appearing before the config has been regenerated
-    # should be ignored. If the error is triggered and you set
-    # CONFIG_CROSS_COMPILE_ARM32, set CROSS_COMPILE_ARM32 to an appropriate value
-    # when invoking make and fix CONFIG_CROSS_COMPILE_ARM32.
-    ifeq ($(CROSS_COMPILE_ARM32),)
-      $(error CROSS_COMPILE_ARM32 not defined or empty, the compat vDSO will not be built)
-    else ifeq ($(cc-name),clang)
-      export CLANG_TRIPLE_ARM32 ?= $(CROSS_COMPILE_ARM32)
-      export CLANG_TARGET_ARM32 := --target=$(notdir $(CLANG_TRIPLE_ARM32:%-=%))
-      export GCC_TOOLCHAIN32_DIR := $(dir $(shell which $(CROSS_COMPILE_ARM32)ld))
-      export GCC_TOOLCHAIN32 := $(realpath $(GCC_TOOLCHAIN32_DIR)/..)
-      export CLANG_PREFIX32 := --prefix=$(GCC_TOOLCHAIN32_DIR)$(notdir $(CROSS_COMPILE_ARM32))
-      export CLANG_GCC32_TC := --gcc-toolchain=$(GCC_TOOLCHAIN32)
-      export CONFIG_VDSO32 := y
-      vdso32 := -DCONFIG_VDSO32=1
-    else ifeq ($(shell which $(CROSS_COMPILE_ARM32)$(cc-name) 2> /dev/null),)
-      $(error $(CROSS_COMPILE_ARM32)$(cc-name) not found, check CROSS_COMPILE_ARM32)
+abort() {
+    # Kembali ke direktori sebelumnya
+    cd -
+
+    # Jika running di local machine, lakukan cleanup
+    if [[ "$LOCAL" == "y" ]]; then
+        clean
+    fi
+
+    separator
+    quotes "Failed to Compile Kernel! Exiting"
+    separator
+
+    exit -1
+}
+
+# Fungsi untuk mengecek status eksekusi perintah sebelumnya
+check() {
+    if [ $? -eq 0 ]; then
+        echo "-- Setup $1 Done!"
     else
-      export CROSS_COMPILE_ARM32
-      export CONFIG_VDSO32 := y
-      vdso32 := -DCONFIG_VDSO32=1
-    endif
-  endif
-endif
+        quotes "Failed! Cancel the Script"
+        abort
+    fi
+}
 
-ifeq ($(cc-name),clang)
-# This is a workaround for https://bugs.llvm.org/show_bug.cgi?id=30792.
-# TODO: revert when this is fixed in LLVM.
-KBUILD_CFLAGS	+= -mno-implicit-float
-else
-KBUILD_CFLAGS	+= -mgeneral-regs-only
-endif
-KBUILD_CFLAGS	+= $(lseinstr) $(brokengasinst) $(vdso32)
-KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
-KBUILD_CFLAGS	+= $(call cc-option, -mpc-relative-literal-loads)
-KBUILD_CFLAGS	+= -fno-pic
-KBUILD_CFLAGS	+= $(call cc-disable-warning, psabi)
-KBUILD_AFLAGS	+= $(lseinstr) $(brokengasinst) $(vdso32)
+# =============================================================================
+# FUNGSI SETUP ENVIRONMENT
+# =============================================================================
 
-KBUILD_CFLAGS	+= $(call cc-option,-mabi=lp64)
-KBUILD_AFLAGS	+= $(call cc-option,-mabi=lp64)
+# Fungsi untuk update submodules
+submodule() {
+    separator
+    quotes "Fetch all Submodules Update"
 
-ifeq ($(CONFIG_AS_HAS_ARMV8_2), y)
-# make sure to pass the newest target architecture to -march.
-asm-arch := armv8.2-a
-endif
+    git submodule init && git submodule update --remote
+    git submodule update -f -q --init --recursive > /dev/null
+    check "Submodules"
+}
 
-ifeq ($(CONFIG_SOC_EXYNOS9820), y)
-ifeq ($(cc-name),clang)
-KBUILD_CFLAGS   += -mcpu=cortex-a75
-KBUILD_AFLAGS   += -mcpu=cortex-a75
-ifeq ($(CONFIG_LD_IS_LLD), y)
-KBUILD_LDFLAGS  += -mllvm -mcpu=cortex-a75
-endif
-else
-KBUILD_CFLAGS   += -mcpu=cortex-a75.cortex-a55
-KBUILD_AFLAGS   += -mcpu=cortex-a75.cortex-a55
-endif
-endif
+# Fungsi untuk mendeteksi dan setup environment build
+detect_env() {
+    # Set Build Variable
+    separator
 
-ifeq ($(CONFIG_CPU_BIG_ENDIAN), y)
-KBUILD_CPPFLAGS	+= -mbig-endian
-CHECKFLAGS	+= -D__AARCH64EB__
-AS		+= -EB
-ifeq ($(ld-name),gold)
-LDFLAGS		+= -EB -maarch64_elf64_be_vec
-else
-# Prefer the baremetal ELF build target, but not all toolchains include
-# it so fall back to the standard linux version if needed.
-LDFLAGS		+= -EB $(call ld-option, -maarch64elfb, -maarch64linuxb)
-endif
-UTS_MACHINE	:= aarch64_be
-else
-KBUILD_CPPFLAGS	+= -mlittle-endian
-CHECKFLAGS	+= -D__AARCH64EL__
-AS		+= -EL
-ifeq ($(ld-name),gold)
-LDFLAGS		+= -EL -maarch64_elf64_le_vec
-else
-# Same as above, prefer ELF but fall back to linux target if needed.
-LDFLAGS		+= -EL $(call ld-option, -maarch64elf, -maarch64linux)
-endif
-UTS_MACHINE	:= aarch64
-endif
+    DATE=`date +"%Y%m%d"`
+    BUILD_URL="https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/"
+    REPO_URL="https://raw.githubusercontent.com/ivanmeler/android_kernel_samsung_beyondlte/refs/heads/oneui5_beyond/" 
+    KERNEL_NAME=SagaKernel
+    export KBUILD_BUILD_USER=papaL3xa
+    export KBUILD_BUILD_HOST=SagaKernel
 
-CHECKFLAGS	+= -D__aarch64__ -m64
+    # Tentukan device berdasarkan SOC
+    if [[ "$SOC" == "5" ]]; then
+        DEVICE=Note10
+    else
+        DEVICE=S10
+    fi
 
-ifeq ($(CONFIG_ARM64_MODULE_CMODEL_LARGE), y)
-KBUILD_CFLAGS_MODULE	+= -mcmodel=large
-ifeq ($(CONFIG_LTO_CLANG), y)
-# Code model is not stored in LLVM IR, so we need to pass it also to LLVMgold
-LDFLAGS		+= -plugin-opt=-code-model=large
-endif
-endif
+    # Cek apakah running di GitHub Actions atau local
+    if [ ! -z $RELEASE ]; then
+        quotes "Running on GitHub Actions"
+        echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+    else
+        quotes "Running on Local Machine"
+        LOCAL=y
+    fi
 
-ifeq ($(CONFIG_ARM64_MODULE_PLTS),y)
-KBUILD_LDFLAGS_MODULE	+= -T $(srctree)/arch/arm64/kernel/module.lds
-endif
+    # Set default value untuk variabel yang tidak ditentukan
+    if [ -z $KERNEL_VERSION ]; then
+        KERNEL_VERSION=Unofficial
+    fi
 
-# Default value
-head-y		:= arch/arm64/kernel/head.o
+    if [ -z $KSU ]; then
+        KSU=y
+    fi
 
-# The byte offset of the kernel image in RAM from the start of RAM.
-ifeq ($(CONFIG_ARM64_RANDOMIZE_TEXT_OFFSET), y)
-TEXT_OFFSET := $(shell awk "BEGIN {srand(); printf \"0x%06x\n\", \
-		 int(2 * 1024 * 1024 / (2 ^ $(CONFIG_ARM64_PAGE_SHIFT)) * \
-		 rand()) * (2 ^ $(CONFIG_ARM64_PAGE_SHIFT))}")
-else
-TEXT_OFFSET := 0x00080000
-endif
+    if [ -z $CLEAN ]; then
+        CLEAN=n
+    fi
 
-ifeq ($(cc-name),clang)
-KBUILD_CFLAGS += $(call cc-disable-warning, asm-operand-widths)
-endif
+    separator
 
-# KASAN_SHADOW_OFFSET = VA_START + (1 << (VA_BITS - 3)) - (1 << 61)
-# in 32-bit arithmetic
-KASAN_SHADOW_OFFSET := $(shell printf "0x%08x00000000\n" $$(( \
-			(0xffffffff & (-1 << ($(CONFIG_ARM64_VA_BITS) - 32))) \
-			+ (1 << ($(CONFIG_ARM64_VA_BITS) - 32 - 3)) \
-			- (1 << (64 - 32 - 3)) )) )
+    # Setup Android Image Kitchen
+    if test -d "build/AIK"; then
+        quotes "Android Image Kitchen Directory Found!"
+    else
+        quotes "Add Android Image Kitchen as Submodule"
+        git submodule add -f -q https://github.com/papaL3xa/Android-Image-Kitchen build/AIK > /dev/null && chmod +x build/AIK/mk*
+        check "Android Image Kitchen Directory"
+    fi
 
-export	TEXT_OFFSET GZFLAGS
+    # Setup ramdisk binary
+    setup_ramdisk
 
-core-y		+= arch/arm64/kernel/ arch/arm64/mm/
-core-$(CONFIG_NET) += arch/arm64/net/
-core-$(CONFIG_KVM) += arch/arm64/kvm/
-core-$(CONFIG_XEN) += arch/arm64/xen/
-core-$(CONFIG_CRYPTO) += arch/arm64/crypto/
-libs-y		:= arch/arm64/lib/ $(libs-y)
-core-$(CONFIG_EFI_STUB) += $(objtree)/drivers/firmware/efi/libstub/lib.a
+    # Setup DTB build tools
+    setup_dtb_tools
 
-# Default target when executing plain make
-boot		:= arch/arm64/boot
-ifeq ($(CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE),y)
-KBUILD_IMAGE	:= $(boot)/$(subst $\",,$(CONFIG_BUILD_ARM64_APPENDED_KERNEL_IMAGE_NAME))
-else
-KBUILD_IMAGE	:= $(boot)/Image.gz
-endif
+    # Setup module binary dan props
+    setup_module_files
 
-KBUILD_DTBS	:= dtbs
+    check "Build Environment"
+}
 
-all:	Image.gz $(KBUILD_DTBS) $(subst $\",,$(CONFIG_BUILD_ARM64_APPENDED_KERNEL_IMAGE_NAME))
+# Fungsi untuk setup ramdisk binary
+setup_ramdisk() {
+    if test -f "build/AIK/ramdisk/dpolicy" && test -f "build/AIK/init"; then
+        quotes "Ramdisk Binary Found!"
+    else
+        if ! test -d "build/AIK/ramdisk"; then
+            mkdir -p build/AIK/ramdisk
+        fi
+        
+        if ! test -f "build/AIK/dpolicy"; then
+            quotes "Getting Ramdisk dpolicy"
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/dpolicy" -o build/AIK/ramdisk/dpolicy
+        fi
 
+        if ! test -f "build/AIK/init"; then
+            quotes "Getting Ramdisk init"
+            curl -LSs "${REPO_URL}ramdisk/ramdisk/init" -o build/AIK/ramdisk/init && chmod +x build/AIK/ramdisk/i*
+        fi
 
-Image: vmlinux
-	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+        check "Ramdisk Binary"
+    fi
 
-Image.%: Image
-	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+    if ! test -f "build/AIK/fstab.exynos982$SOC"; then
+        quotes "Get Fstab for Exynos 982$SOC"
+        rm -rf build/AIK/ramdisk/f*
+        curl -LSs "${REPO_URL}ramdisk/fstab.exynos982$SOC" -o build/AIK/ramdisk/fstab.exynos982$SOC
+        check "Fstab for Exynos 982$SOC"
+    fi
+}
 
-zinstall install:
-	$(Q)$(MAKE) $(build)=$(boot) $@
+# Fungsi untuk setup DTB build tools
+setup_dtb_tools() {
+    if test -f "build/mkdtimg"; then
+        quotes "DTB Build Script Found!"
+    else
+        quotes "Getting DTB Build Script"
+        curl -LSs "${REPO_URL}toolchains/mkdtimg" -o build/mkdtimg && chmod +x build/mk*
+        check "DTB Build Script"
+    fi
 
-%.dtb: scripts
-	$(Q)$(MAKE) $(build)=$(boot)/dts $(boot)/dts/$@
+    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
+        quotes "DTB Config Directory Found!"
+    else
+        if ! test -d "build/dtconfigs"; then
+            mkdir -p build/dtconfigs
+        fi
 
-%.dtbo: scripts
-	$(Q)$(MAKE) $(build)=$(boot)/dts $(boot)/dts/$@
+        download_dtb_configs
+        check "DTB Config Directory"
+    fi
+}
 
-PHONY += dtbs dtbs_install
+# Fungsi untuk download DTB configs
+download_dtb_configs() {
+    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
+        quotes "Getting DTB Config for Exynos 982$SOC"
+        curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
+    fi
 
-dtbs: prepare scripts
-	$(Q)$(MAKE) $(build)=$(boot)/dts
+    if ! test -f "build/dtconfig/$MODEL.cfg"; then
+        quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
-dtbs_install:
-	$(Q)$(MAKE) $(dtbinst)=$(boot)/dts
+        if [[ "$MODEL" == "d1xks" ]]; then
+            curl -LSs "${REPO_URL}toolchains/configs/d1x.cfg" -o build/dtconfigs/$MODEL.cfg
+        else
+            curl -LSs "${REPO_URL}toolchains/configs/$MODEL.cfg" -o build/dtconfigs/$MODEL.cfg
+        fi
 
-Image-dtb: vmlinux scripts dtbs
-	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+        # Patch untuk model d2s
+        if [[ "$MODEL" == "d2s" ]]; then
+            sed -i "s/d2/$MODEL/g" build/dtconfigs/$MODEL.cfg
+        fi
+    fi
+}
 
-Image.gz-dtb: vmlinux scripts dtbs Image.gz
-	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+# Fungsi untuk setup module files
+setup_module_files() {
+    if ! test -f "build/module-binary"; then
+        quotes "Getting Module Binary"
+        curl -LSs "https://raw.githubusercontent.com/Zackptg5/MMT-Extended/refs/heads/master/META-INF/com/google/android/update-binary" -o build/module-binary
+        check "Module Binary"
+    fi
 
-PHONY += vdso_install
-vdso_install:
-	$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso $@
+    quotes "Getting Module Props"
+    curl -LOSs "${BUILD_URL}module.prop" && curl -LOSs "${BUILD_URL}system.prop" && mv *.p* build
+    check "Module Props"
 
-# We use MRPROPER_FILES and CLEAN_FILES now
-archclean:
-	$(Q)$(MAKE) $(clean)=$(boot)
-	$(Q)$(MAKE) $(clean)=$(boot)/dts
+    if ! test -f "build/update-binary"; then
+        quotes "Getting Kernel Zip Binary"
+        curl -LOSs "${REPO_URL}toolchains/update-binary"
+        check "Kernel Zip Binary"
+    fi
 
-# We need to generate vdso-offsets.h before compiling certain files in kernel/.
-# In order to do that, we should use the archprepare target, but we can't since
-# asm-offsets.h is included in some files used to generate vdso-offsets.h, and
-# asm-offsets.h is built in prepare0, for which archprepare is a dependency.
-# Therefore we need to generate the header after prepare0 has been made, hence
-# this hack.
-prepare: vdso_prepare
-vdso_prepare: prepare0
-	$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso include/generated/vdso-offsets.h
-	$(if $(CONFIG_VDSO32),$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso32 \
-					  include/generated/vdso32-offsets.h)
+    quotes "Getting Kernel Zip Script"
+    curl -LOSs "${BUILD_URL}updater-script" && mv up* build
+    check "Kernel Zip Script"
+}
 
-define archhelp
-  echo  '* Image.gz      - Compressed kernel image (arch/$(ARCH)/boot/Image.gz)'
-  echo  '  Image         - Uncompressed kernel image (arch/$(ARCH)/boot/Image)'
-  echo  '* dtbs          - Build device tree blobs for enabled boards'
-  echo  '  dtbs_install  - Install dtbs to $(INSTALL_DTBS_PATH)'
-  echo  '  install       - Install uncompressed kernel'
-  echo  '  zinstall      - Install compressed kernel'
-  echo  '                  Install using (your) ~/bin/installkernel or'
-  echo  '                  (distribution) /sbin/installkernel or'
-  echo  '                  install to $$(INSTALL_PATH) and run lilo'
-endef
+# =============================================================================
+# FUNGSI TOOLCHAIN SETUP
+# =============================================================================
+
+toolchain() {
+    separator
+    if [[ "$USE_NEUTRON" == "true" ]]; then
+        setup_neutron_clang
+    else
+        setup_standard_clang
+    fi
+}
+
+# Fungsi untuk setup Neutron Clang
+setup_neutron_clang() {
+    NEUTRON_DATE="=$NEUTRON"
+    KERNELCLANG=NeutronClang-$NEUTRON
+    CLANG_INFO="Neutron Clang ($NEUTRON)"
+    TOOLCHAIN_PATH="toolchain/neutron-$NEUTRON"
+    
+    quotes "Using $CLANG_INFO"
+    
+    if test -d "$TOOLCHAIN_PATH"; then
+        quotes "$CLANG_INFO Directory Found!"
+    else
+        rm -rf $TOOLCHAIN_PATH
+        mkdir -p $TOOLCHAIN_PATH
+        quotes "Downloading $CLANG_INFO"
+        separator
+        cd $TOOLCHAIN_PATH
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") -S$NEUTRON_DATE
+        
+        # Install file package jika belum ada
+        if ! test -f "/usr/bin/file"; then
+            separator
+            quotes "Installing File Package"
+            separator
+            sudo apt install -y file
+        fi
+        
+        separator
+        quotes "Patching glibc"
+        separator
+        bash <(curl -LSs "https://raw.githubusercontent.com/Neutron-Toolchains/antman/refs/heads/main/antman") --patch=glibc
+        cd $OLDPWD
+        separator
+        check "Neutron Clang"
+    fi
+    
+    setup_clang_environment
+}
+
+# Fungsi untuk setup standard Clang
+setup_standard_clang() {
+    set_clang_version
+    KERNELCLANG=Clang$LLVM
+    CLANG_VERSION="r$CLANG"
+    CLANG_INFO="Clang $LLVM$MINOR (Based on $CLANG_VERSION)"
+    TOOLCHAIN_PATH="toolchain/clang-$CLANG_VERSION"
+
+    quotes "Using $CLANG_INFO"
+
+    if test -d "$TOOLCHAIN_PATH"; then
+        quotes "$CLANG_INFO Directory Found!"
+    else
+        TOOLCHAIN_URL="https://git$HOST.com/$ROM/android_prebuilts_clang_host_linux-x86_clang-$CLANG_VERSION.git"
+
+        quotes "Downloading $CLANG_INFO"
+        git submodule add -f -q "$TOOLCHAIN_URL" "$TOOLCHAIN_PATH" > /dev/null
+        check "clang-$CLANG_VERSION"
+    fi
+
+    setup_clang_environment
+}
+
+# Fungsi untuk set versi Clang berdasarkan pilihan LLVM
+set_clang_version() {
+    case $LLVM in
+        12)
+            CLANG=416183b1 # Clang 12.0.7
+            MINOR=".0.5"
+            HOST=hub
+            ROM="ArrowOS-Devices"
+            ;;
+        13)
+            CLANG=433403b # Clang 13.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        14)
+            CLANG=450784 # Clang 14.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        15)
+            CLANG=468909b # Clang 15.0.3
+            MINOR=".0.3"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        16)
+            CLANG=475365b # Clang 16.0.2
+            MINOR=".0.2"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        17)
+            CLANG=498229b # Clang 17.0.4
+            MINOR=".0.4"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        18)
+            CLANG=522817 # Clang 18.0.1
+            MINOR=".0.1"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        19)
+            CLANG=536225 # Clang 19.0.1
+            MINOR=".0.1"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        20)
+            CLANG=547379 # Clang 20.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM=crdroidandroid
+            ;;
+        21)
+            CLANG=563880 # Clang 21.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM="reaPeR1010"
+            ;;
+        *)
+            LLVM=21
+            CLANG=563880 # Clang 21.0.0
+            MINOR=".0.0"
+            HOST=lab
+            ROM="reaPeR1010"
+            ;;
+    esac
+}
+
+# Fungsi untuk setup environment Clang
+setup_clang_environment() {
+    ORIG_PATH=$PATH
+    CLANG_DIR="$PWD/$TOOLCHAIN_PATH"
+    PATH="$CLANG_DIR/bin:$ORIG_PATH"
+
+    ARGS="
+        ARCH=arm64 O=out \
+        LLVM=1 LLVM_IAS=1 \
+        CC=clang \
+        LD=ld.lld \
+        AR=llvm-ar \
+        NM=llvm-nm \
+        OBJCOPY=llvm-objcopy \
+        OBJDUMP=llvm-objdump \
+        STRIP=llvm-strip \
+        READELF=llvm-readelf \
+        OBJSIZE=llvm-size \
+    "
+}
+
+# =============================================================================
+# FUNGSI KERNELSU SETUP
+# =============================================================================
+
+kernelsu() {
+    separator
+
+    # Setup KernelSU Next
+    if ! test -d "drivers/kernelsu"; then
+        quotes "update KernelSU Next as Submodule"
+        separator
+
+     git submodule init && git submodule update --remote
+    fi
+}
+
+# =============================================================================
+# FUNGSI BUILD KERNEL
+# =============================================================================
+
+kernel() {
+    # Build Kernel Image
+    separator
+    noquotes "Fetch Kernel Info"
+    separator
+    noquotes "Device: $DEVICE ("$MODEL")"
+    noquotes "SOC: Exynos 982$SOC"
+    noquotes "Defconfig: $KERNEL_DEFCONFIG"
+    noquotes "Kernel Version: $KERNEL_VERSION"
+    noquotes "Build Date: `date +"%Y-%m-%d"`"
+
+    if [ -z $KSU_NEXT ]; then
+        noquotes "KernelSU Next with SuSFS: Not Include"
+    else
+        noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
+    fi
+
+    # Update kernel configuration
+    update_kernel_config
+
+    DEFCONFIG="$KERNEL_DEFCONFIG saga.config $KSU_NEXT"
+
+    separator
+    noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
+    quotes "Generating Configuration Files"
+    separator
+
+    make -j$(nproc --all) $ARGS $DEFCONFIG || abort
+
+    separator
+    quotes "Building Kernel"
+    separator
+
+    make -j$(nproc --all) $ARGS || abort
+
+    separator
+    quotes "Finished Kernel Build!"
+    separator
+
+    # Prepare output directory
+    rm -rf build/out/$MODEL
+    mkdir -p build/out/$MODEL
+}
+
+# Fungsi untuk update konfigurasi kernel
+update_kernel_config() {
+    sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+    sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
+}
+
+# =============================================================================
+# FUNGSI BUILD DTB/DTBO
+# =============================================================================
+
+dtb() {
+    # Build DTB Image
+    quotes "Building Device Tree Blob Image for Exynos 982$SOC"
+    separator
+
+    ./build/mkdtimg cfg_create build/out/$MODEL/dtb_exynos982$SOC.img build/dtconfigs/exynos982$SOC.cfg -d out/arch/arm64/boot/dts/exynos
+
+    # Build DTBO Image
+    separator
+    quotes "Building Device Tree Blob Image for $DEVICE ($MODEL)"
+    separator
+
+    ./build/mkdtimg cfg_create build/out/$MODEL/dtbo_$MODEL.img build/dtconfigs/$MODEL.cfg -d out/arch/arm64/boot/dts/samsung
+}
+
+# =============================================================================
+# FUNGSI BUILD RAMDISK
+# =============================================================================
+
+ramdisk() {
+    # Build Ramdisk
+    separator
+    quotes "Building Ramdisk"
+    separator
+
+    rm -rf build/AIK/s*
+    mkdir -p build/AIK/split_img
+    pushd build/AIK/split_img > /dev/null
+    
+    # Setup boot image components
+    setup_boot_image_components
+    
+    popd > /dev/null
+
+    # Create Boot Image
+    quotes "Calling Android Image Kitchen"
+    pushd build/AIK > /dev/null
+
+    # Create ramdisk directories
+    create_ramdisk_directories
+
+    ./mkimg
+    popd > /dev/null
+}
+
+# Fungsi untuk setup komponen boot image
+setup_boot_image_components() {
+    mv ../../../out/arch/arm64/boot/Image boot.img-kernel
+    echo -e "0x10000000" > boot.img-base
+    echo -e $BOARD > boot.img-board
+    echo -e "loop.max_part=7" > boot.img-cmdline
+    echo -e "sha1" > boot.img-hashtype
+    echo -e "1" > boot.img-header_version
+    echo -e "AOSP" > boot.img-imgtype
+    echo -e "0x00008000" > boot.img-kernel_offset
+    echo -e "45285376" > boot.img-origsize
+    echo -e "2023-04" > boot.img-os_patch_level
+    echo -e "12.0.0" > boot.img-os_version
+    echo -e "2048" > boot.img-pagesize
+    echo -e "0x01000000" > boot.img-ramdisk_offset
+    echo -e "gzip" > boot.img-ramdiskcomp
+    echo -e "0xf0000000" > boot.img-second_offset
+    echo -e "0x00000100" > boot.img-tags_offset
+}
+
+# Fungsi untuk membuat direktori ramdisk
+create_ramdisk_directories() {
+    mkdir -p ramdisk/debug_ramdisk
+    mkdir -p ramdisk/dev
+    mkdir -p ramdisk/mnt
+    mkdir -p ramdisk/proc
+    mkdir -p ramdisk/sys
+}
+
+# =============================================================================
+# FUNGSI BUILD FLASHABLE ZIP
+# =============================================================================
+
+build_zip() {
+    # Build Zip
+    separator
+    quotes "Building Zip"
+    if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
+        separator
+    fi
+
+    pushd build > /dev/null
+    
+    # Prepare zip structure
+    prepare_zip_structure
+    
+    # Copy files to zip directory
+    copy_files_to_zip
+    
+    # Create module zip
+    create_module_zip
+    
+    popd > /dev/null
+    
+    # Update updater script dengan informasi build
+    update_updater_script
+    
+    # Create final zip
+    create_final_zip
+}
+
+# Fungsi untuk mempersiapkan struktur zip
+prepare_zip_structure() {
+    rm -rf out/$MODEL/zip
+    mkdir -p export
+    mkdir -p out/$MODEL/zip/module/common/
+    mkdir -p out/$MODEL/zip/module/META-INF/com/google/android
+    mkdir -p out/$MODEL/zip/META-INF/com/google/android
+    mv AIK/image-new.img out/$MODEL/boot-patched.img
+}
+
+# Fungsi untuk menyalin file ke direktori zip
+copy_files_to_zip() {
+    cp out/$MODEL/boot-patched.img out/$MODEL/zip/boot.img
+    cp out/$MODEL/dtb_exynos982$SOC.img out/$MODEL/zip/dtb.img
+    cp out/$MODEL/dtbo_$MODEL.img out/$MODEL/zip/dtbo.img
+    cp update-binary out/$MODEL/zip/META-INF/com/google/android/
+    mv updater-script out/$MODEL/zip/META-INF/com/google/android/
+
+    mv module.prop out/$MODEL/zip/module/
+    mv system.prop out/$MODEL/zip/module/common/
+    cp module-binary out/$MODEL/zip/module/META-INF/com/google/android/update-binary
+    echo -e "#MAGISK" > out/$MODEL/zip/module/META-INF/com/google/android/updater-script
+}
+
+# Fungsi untuk membuat module zip
+create_module_zip() {
+    cd out/$MODEL/zip/module
+    zip -r ../module.zip .
+    rm -rf out/$MODEL/zip/module
+}
+
+# Fungsi untuk update updater script dengan informasi build
+update_updater_script() {
+    sed -i "s/ui_print(\" Kernel Version: \");/ui_print(\" Kernel Version: $KERNEL_VERSION\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    sed -i "s/ui_print(\" Kernel Device: \");/ui_print(\" Kernel Device: $DEVICE ($MODEL)\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+    sed -i "s/ui_print(\" Kernel Toolchain: \");/ui_print(\" Kernel Toolchain: $CLANG_INFO\");/" build/out/$MODEL/zip/META-INF/com/google/android/updater-script
+}
+
+# Fungsi untuk membuat final zip
+create_final_zip() {
+    if [[ "$LOCAL" == "y" ]] || [[ "$RELEASE" == "y" ]]; then
+        sed -i "s/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DEVICE"-$MODEL\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-"$DATE"-"$DEVICE"-$MODEL-$KERNELCLANG\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
+        NAME=$(grep -o 'CONFIG_LOCALVERSION="[^"]*"' arch/arm64/configs/$KERNEL_DEFCONFIG | cut -d '"' -f 2)
+        NAME=${NAME:1}.zip
+        pushd build/out/$MODEL/zip > /dev/null
+        zip -r ../"$NAME" .
+        popd > /dev/null
+        pushd build/out > /dev/null
+        rm -rf $MODEL/zip
+        mv $MODEL/"$NAME" ../export/"$NAME"
+        popd > /dev/null
+    fi
+}
+
+# =============================================================================
+# FUNGSI PARSING ARGUMEN
+# =============================================================================
+
+usage() {
+    cat << EOF
+Usage: $(basename "$0") [options]
+Options:
+    -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
+    -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
+    -h, --help             List all Build Script Command
+    -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
+    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -r, --Release          # Use when Run on GitHub Actions (y: Release - n: CI)
+EOF
+}
+
+# Fungsi untuk parsing argumen command line
+parse_arguments() {
+    USE_NEUTRON=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --model|-m)
+                MODEL="$2"
+                shift 2
+                ;;
+            --ksu|-k)
+                KSU_OPTION="$2"
+                shift 2
+                ;;
+            --ver|-v)
+                KERNEL_VERSION="$2"
+                shift 2
+                ;;
+            --rel|-r)
+                RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
+                shift 2
+                ;;
+            --help|-h)
+                usage
+                exit 1
+                ;;
+            --clean|-c)
+                CLEAN="$2"
+                shift 2
+                ;;
+            --llvm|-l)
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    LLVM="$2"
+                    shift 2
+                else
+                    LLVM=21
+                    shift
+                fi
+                
+                # Check if LLVM version is between 12-21
+                if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 21 ]]; then
+                    USE_NEUTRON=false
+                    echo "-- Using Clang $LLVM"
+                else
+                    USE_NEUTRON=true
+                    NEUTRON="${LLVM:-10032024}"
+                    echo "-- Using Neutron Clang ($NEUTRON)"
+                fi
+                ;;
+            *)
+                usage
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Fungsi untuk setup model dan SOC
+setup_model() {
+    if [ -z $MODEL ]; then
+        MODEL=d2s
+    fi
+
+    KERNEL_DEFCONFIG=saga-"$MODEL"_defconfig
+    case $MODEL in
+    beyond0lte)
+        SOC=0
+        BOARD=SRPRI28A014KU
+    ;;
+    beyond1lte)
+        SOC=0
+        BOARD=SRPRI28B014KU
+    ;;
+    beyond2lte)
+        SOC=0
+        BOARD=SRPRI17C014KU
+    ;;
+    beyondx)
+        SOC=0
+        BOARD=SRPSC04B011KU
+    ;;
+    d1)
+        SOC=5
+        BOARD=SRPSD26B007KU
+    ;;
+    d1xks)
+        SOC=5
+        BOARD=SRPSD23A002KU
+    ;;
+    d2s)
+        SOC=5
+        BOARD=SRPSC14B007KU
+    ;;
+    d2x)
+        SOC=5
+        BOARD=SRPSC14C007KU
+    ;;
+    *)
+        usage
+        exit
+    esac
+}
+
+# =============================================================================
+# FUNGSI MAIN
+# =============================================================================
+
+main() {
+    # Setup logging
+    rm -rf ./build.log
+    
+    (
+        START=`date +%s`
+
+        separator
+        quotes "Preparing Build Environment"
+
+        # Parse arguments dan setup environment
+        parse_arguments "$@"
+        setup_model
+        detect_env
+        toolchain
+        
+        # Change to script directory
+        pushd $(dirname "$0") > /dev/null
+
+        # Setup submodules jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            submodule
+        fi
+
+        # Setup KernelSU jika diaktifkan
+        if [[ "$KSU" == "y" ]]; then
+            KSU_NEXT=ksu.config
+            kernelsu
+        fi
+
+        # Build process
+        kernel
+        dtb
+        ramdisk
+        build_zip
+
+        # Cleanup jika running di local
+        if [[ "$LOCAL" == "y" ]]; then
+            clean
+            separator
+        fi
+
+        # Calculate and display build time
+        END=`date +%s`
+        let "ELAPSED=$END-$START"
+        quotes "Total Compile Time was $(($ELAPSED / 60)) Minutes and $(($ELAPSED % 60)) Seconds"
+        separator
+        
+    ) 2>&1 | tee -a ./build.log
+}
+
+# =============================================================================
+# EXECUTE MAIN FUNCTION
+# =============================================================================
+
+main "$@"
