@@ -108,25 +108,34 @@ detect_env() {
     fi
 
     # Cek apakah running di GitHub Actions atau local
-    if [ ! -z $RELEASE ]; then
-        quotes "Running on GitHub Actions"
-        echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+    if [[ "$RELEASE" == "y" ]]; then
+        quotes "Running in Release Mode"
+        # Untuk GitHub Actions, gunakan GITHUB_ENV jika tersedia
+        if [ ! -z "$GITHUB_ENV" ]; then
+            echo BUILD_DEVICE=$DEVICE >> $GITHUB_ENV
+        fi
+    elif [[ "$RELEASE" == "n" ]]; then
+        quotes "Running in CI Mode"
     else
         quotes "Running on Local Machine"
         LOCAL=y
     fi
 
     # Set default value untuk variabel yang tidak ditentukan
-    if [ -z $KERNEL_VERSION ]; then
+    if [ -z "$KERNEL_VERSION" ]; then
         KERNEL_VERSION=Unofficial
     fi
 
-    if [ -z $KSU ]; then
+    if [ -z "$KSU" ]; then
         KSU=y
     fi
 
-    if [ -z $CLEAN ]; then
+    if [ -z "$CLEAN" ]; then
         CLEAN=n
+    fi
+
+    if [ -z "$RELEASE" ]; then
+        RELEASE=n
     fi
 
     separator
@@ -428,10 +437,9 @@ kernelsu() {
 
     # Setup KernelSU Next
     if ! test -d "drivers/kernelsu"; then
-        quotes "update KernelSU Next as Submodule"
+        quotes "Update KernelSU Next as Submodule"
         separator
-
-     git submodule init && git submodule update --remote
+        git submodule init && git submodule update --remote
     fi
 }
 
@@ -450,7 +458,7 @@ kernel() {
     noquotes "Kernel Version: $KERNEL_VERSION"
     noquotes "Build Date: `date +"%Y-%m-%d"`"
 
-    if [ -z $KSU_NEXT ]; then
+    if [ -z "$KSU_NEXT" ]; then
         noquotes "KernelSU Next with SuSFS: Not Include"
     else
         noquotes "KernelSU Next with SuSFS: Include (Using $KSU_NEXT)"
@@ -662,12 +670,21 @@ usage() {
 Usage: $(basename "$0") [options]
 Options:
     -m, --model [value]    Specify the Model Code of the Phone (default: d2s)
+                           Available models: beyond0lte, beyond1lte, beyond2lte, beyondx, d1, d1xks, d2s, d2x
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
-    -h, --help             List all Build Script Command
-    -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
-    -r, --rel [y/N]        Release mode for GitHub Actions (y: Release - n: CI) (default: n)
     -v, --ver [value]      Kernel version (default: Unofficial)
+    -r, --rel [y/N]        Release mode: y for Release, n for CI (default: n)
+    -c, --clean [y/N]      Reset all changes to latest commit (default: n)
+                           WARNING: All uncommitted changes will be lost!
+    -l, --llvm [value]     Clang version (12-21) or Neutron Clang version (default: 21)
+                           Examples: 18 for Clang 18, 10032024 for Neutron Clang
+    -h, --help             Show this help message
+
+Examples:
+    ./build.sh -m d2s -r y              # Build for d2s model in Release mode
+    ./build.sh -m beyond2lte -r n       # Build for beyond2lte in CI mode
+    ./build.sh -m d1xks -k n -l 18      # Build for d1xks without KSU, using Clang 18
+    ./build.sh -m d2s -c y              # Clean build for d2s
 EOF
 }
 
@@ -678,28 +695,58 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --model|-m)
-                MODEL="$2"
-                shift 2
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    MODEL="$2"
+                    shift 2
+                else
+                    echo "Error: --model requires a value"
+                    usage
+                    exit 1
+                fi
                 ;;
             --ksu|-k)
-                KSU="$2"
-                shift 2
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    KSU="$2"
+                    shift 2
+                else
+                    echo "Error: --ksu requires a value (y/N)"
+                    usage
+                    exit 1
+                fi
                 ;;
             --ver|-v)
-                KERNEL_VERSION="$2"
-                shift 2
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    KERNEL_VERSION="$2"
+                    shift 2
+                else
+                    echo "Error: --ver requires a value"
+                    usage
+                    exit 1
+                fi
                 ;;
             --rel|-r)
-                RELEASE="$2" # Use when Run on GitHub Actions (y: Release - n: CI)
-                shift 2
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    RELEASE="$2"
+                    shift 2
+                else
+                    echo "Error: --rel requires a value (y/N)"
+                    usage
+                    exit 1
+                fi
                 ;;
             --help|-h)
                 usage
-                exit 1
+                exit 0
                 ;;
             --clean|-c)
-                CLEAN="$2"
-                shift 2
+                if [[ -n "$2" && "$2" != -* ]]; then
+                    CLEAN="$2"
+                    shift 2
+                else
+                    echo "Error: --clean requires a value (y/N)"
+                    usage
+                    exit 1
+                fi
                 ;;
             --llvm|-l)
                 if [[ -n "$2" && "$2" != -* ]]; then
@@ -721,6 +768,7 @@ parse_arguments() {
                 fi
                 ;;
             *)
+                echo "Unknown option: $1"
                 usage
                 exit 1
                 ;;
@@ -730,8 +778,9 @@ parse_arguments() {
 
 # Fungsi untuk setup model dan SOC
 setup_model() {
-    if [ -z $MODEL ]; then
+    if [ -z "$MODEL" ]; then
         MODEL=d2s
+        echo "-- Using default model: $MODEL"
     fi
 
     KERNEL_DEFCONFIG=bataxe-"$MODEL"_defconfig
@@ -739,38 +788,41 @@ setup_model() {
     beyond0lte)
         SOC=0
         BOARD=SRPRI28A014KU
-    ;;
+        ;;
     beyond1lte)
         SOC=0
         BOARD=SRPRI28B014KU
-    ;;
+        ;;
     beyond2lte)
         SOC=0
         BOARD=SRPRI17C014KU
-    ;;
+        ;;
     beyondx)
         SOC=0
         BOARD=SRPSC04B011KU
-    ;;
+        ;;
     d1)
         SOC=5
         BOARD=SRPSD26B007KU
-    ;;
+        ;;
     d1xks)
         SOC=5
         BOARD=SRPSD23A002KU
-    ;;
+        ;;
     d2s)
         SOC=5
         BOARD=SRPSC14B007KU
-    ;;
+        ;;
     d2x)
         SOC=5
         BOARD=SRPSC14C007KU
-    ;;
+        ;;
     *)
+        echo "Error: Unknown model: $MODEL"
+        echo "Available models: beyond0lte, beyond1lte, beyond2lte, beyondx, d1, d1xks, d2s, d2x"
         usage
-        exit
+        exit 1
+        ;;
     esac
 }
 
