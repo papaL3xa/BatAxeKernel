@@ -192,7 +192,7 @@ setup_dtb_tools() {
         check "DTB Build Script"
     fi
 
-    if test -f "build/dtconfig/exynos982$SOC.cfg" && test -f "build/dtconfig/$MODEL.cfg"; then
+    if test -f "build/dtconfigs/exynos982$SOC.cfg" && test -f "build/dtconfigs/$MODEL.cfg"; then
         quotes "DTB Config Directory Found!"
     else
         if ! test -d "build/dtconfigs"; then
@@ -206,12 +206,12 @@ setup_dtb_tools() {
 
 # Fungsi untuk download DTB configs
 download_dtb_configs() {
-    if ! test -f "build/dtconfig/exynos982$SOC.cfg"; then
+    if ! test -f "build/dtconfigs/exynos982$SOC.cfg"; then
         quotes "Getting DTB Config for Exynos 982$SOC"
         curl -LSs "${REPO_URL}toolchains/configs/exynos982$SOC.cfg" -o build/dtconfigs/exynos982$SOC.cfg
     fi
 
-    if ! test -f "build/dtconfig/$MODEL.cfg"; then
+    if ! test -f "build/dtconfigs/$MODEL.cfg"; then
         quotes "Getting DTB Config for $DEVICE ($MODEL)"
 
         if [[ "$MODEL" == "d1xks" ]]; then
@@ -665,7 +665,9 @@ Options:
     -k, --ksu [y/N]        Include KernelSU Next with SuSFS (default: y)
     -h, --help             List all Build Script Command
     -c, --clean [y/N]      Reset all Change to Latest Commit [!! Your Uncommit Change will Lost !!] (default: n)
-    -l, --llvm [value]     Clang (12-18) or Neutron Clang Version (default: 10032024)
+    -l, --llvm [value]     Clang (12-21) or Neutron Clang Version (default: 10032024)
+    -r, --rel [y/N]        Release mode for GitHub Actions (y: Release - n: CI) (default: n)
+    -v, --ver [value]      Kernel version (default: Unofficial)
 EOF
 }
 
@@ -680,7 +682,7 @@ parse_arguments() {
                 shift 2
                 ;;
             --ksu|-k)
-                KSU_OPTION="$2"
+                KSU="$2"
                 shift 2
                 ;;
             --ver|-v)
