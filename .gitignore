@@ -142,3 +142,6 @@ KernelSU-Next/
 
 # Toolchains
 toolchain/*
+
+out/
+gorhanhee/

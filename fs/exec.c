@@ -1926,6 +1926,45 @@ SYSCALL_DEFINE3(execve,
 		const char __user *const __user *, argv,
 		const char __user *const __user *, envp)
 {
+#ifdef CONFIG_RKP_KDP
+	struct filename *path = getname(filename);
+	int error = PTR_ERR(path);
+
+	if(IS_ERR(path))
+		return error;
+
+	if(rkp_cred_enable){
+		uh_call(UH_APP_RKP, RKP_KDP_X4B, (u64)path->name, 0, 0, 0);
+	}
+#endif
+#if defined CONFIG_SEC_RESTRICT_FORK
+	if (CHECK_ROOT_UID(current) && sec_restrict_fork()) {
+		PRINT_LOG("Restricted making process. PID = %d(%s) "
+		"PPID = %d(%s)\n",
+		current->pid, current->comm,
+		current->parent->pid, current->parent->comm);
+#ifdef CONFIG_RKP_KDP
+		putname(path);
+#endif
+		return -EACCES;
+	}
+#ifdef CONFIG_RKP_KDP
+	if(CHECK_ROOT_UID(current) && rkp_cred_enable) {
+		if(rkp_restrict_fork(path)){
+			pr_warn("RKP_KDP Restricted making process. PID = %d(%s) "
+							"PPID = %d(%s)\n",
+			current->pid, current->comm,
+			current->parent->pid, current->parent->comm);
+			putname(path);
+			return -EACCES;
+		}
+	}
+#endif
+#endif
+#ifdef CONFIG_RKP_KDP
+	putname(path);
+#endif
+
 	return do_execve(getname(filename), argv, envp);
 }
 
