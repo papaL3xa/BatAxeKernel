@@ -127,21 +127,7 @@ kernel/configs/android-*.cfg
 # Build files
 build/*
 out/
+gorhanhee/
+*.patch
 *.rej
 *.orig
-*.gitmodules
-*.log
-*.wireguard-fetch-lock
-
-# Python cache
-scripts/crypto/__pycache__/
-scripts/fmp/__pycache__/
-
-# KernelSU-Next
-KernelSU-Next/
-
-# Toolchains
-toolchain/*
-
-out/
-gorhanhee/
