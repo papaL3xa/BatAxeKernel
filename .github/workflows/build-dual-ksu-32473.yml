@@ -133,7 +133,13 @@ jobs:
           APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$APK"
           mkdir -p "$GITHUB_WORKSPACE/manager-export"
-          cp "$APK" "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching-unsigned.apk"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" sign \
+            --ks "$KEYSTORE_FILE" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+            --out "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching.apk" \
+            "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching-unsigned.apk"
+          rm "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching-unsigned.apk"
           "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "$GITHUB_WORKSPACE/manager-export/KernelSU-rsuntk-matching.apk" \
             | tee "$GITHUB_WORKSPACE/manager-export/KernelSU-manager-badging.txt"
           grep -q "versionCode='$KSU_VERSION_CODE'" "$GITHUB_WORKSPACE/manager-export/KernelSU-manager-badging.txt"
@@ -169,7 +175,13 @@ jobs:
           APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$APK"
           mkdir -p "$GITHUB_WORKSPACE/manager-export"
-          cp "$APK" "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible-unsigned.apk"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" sign \
+            --ks "$KEYSTORE_FILE" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+            --out "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible.apk" \
+            "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible-unsigned.apk"
+          rm "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible-unsigned.apk"
           "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging \
             "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-legacy-driver-compatible.apk" \
             | tee "$GITHUB_WORKSPACE/manager-export/KernelSU-Next-manager-badging.txt"
