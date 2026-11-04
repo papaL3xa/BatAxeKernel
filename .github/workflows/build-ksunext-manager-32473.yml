@@ -34,11 +34,8 @@ jobs:
           header = Path("app/src/main/cpp/ksu.h")
           source = Path("app/src/main/cpp/ksu.cc")
 
-          h = header.read_text()
-          old_define = "#define KSU_APP_PROFILE_VER 2"
-          if old_define not in h:
-              raise SystemExit("Expected KSU_APP_PROFILE_VER 2 was not found; refusing an uncertain patch")
-          header.write_text(h.replace(old_define, "#define KSU_APP_PROFILE_VER 3", 1))
+          # RSUKSU 32473 uses KSU_APP_PROFILE_VER=2, matching KSU Next v3.0.1.
+          # Do not rewrite this ABI constant: changing it would break profile compatibility.
 
           s = source.read_text()
           old_hook = """const char* get_hook_mode(void)
@@ -95,6 +92,24 @@ jobs:
           s = s.replace(old_name, 'val managerVersionName by extra("v3.0.1-32473")', 1)
           p.write_text(s)
           print("Manager versionCode=32473, versionName=v3.0.1-32473")
+          PY
+
+      - name: Pin Manager APK version to kernel driver 32473
+        working-directory: ksunext/manager
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build.gradle.kts")
+          s = p.read_text()
+          old_code = "val managerVersionCode by extra(getVersionCode())"
+          old_name = "val managerVersionName by extra(getVersionName())"
+          if old_code not in s or old_name not in s:
+              raise SystemExit("Could not find the exact manager version declarations")
+          s = s.replace(old_code, "val managerVersionCode by extra(32473)", 1)
+          s = s.replace(old_name, 'val managerVersionName by extra("v3.0.1-32473")', 1)
+          p.write_text(s)
+          print("Pinned APK versionCode=32473, versionName=v3.0.1-32473")
           PY
 
       - name: Set up Java 21
