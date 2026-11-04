@@ -1,56 +1,22 @@
-name: N971N-U2-KSU-Matrix
+name: N971N-U2-KSUN-Legacy-Test
 
 on:
+  push:
+    branches:
+      - chatgpt/ksun-legacy-build-test
   workflow_dispatch:
     inputs:
       version:
         description: Kernel local version suffix
         required: true
-        default: N971N-U2-KSU-Matrix
-      variant:
-        description: Build one variant or all three
-        required: true
-        type: choice
-        default: all
-        options:
-          - all
-          - rksu
-          - ksun
-          - official-susfs
-      rksu_ref:
-        description: RSNTK KernelSU branch, tag or commit SHA
-        required: true
-        default: master
-      ksun_ref:
-        description: KernelSU Next branch, tag or commit SHA (legacy targets non-GKI 4.14)
-        required: true
-        default: legacy
-      official_ref:
-        description: Official KernelSU tag or commit SHA (v0.9.5 is last non-GKI kernel line)
-        required: true
-        default: v0.9.5
+        default: N971N-U2-KSUN-TEST1
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    if: ${{ inputs.variant == 'all' || inputs.variant == matrix.variant }}
+  build-ksun-legacy:
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: rksu
-            manager_dir: ksu-src/rksu/manager
-            ref_input: rksu_ref
-          - variant: ksun
-            manager_dir: ksu-src/ksun/manager
-            ref_input: ksun_ref
-          - variant: official-susfs
-            manager_dir: ksu-src/official/manager
-            ref_input: official_ref
-
     steps:
       - name: Checkout kernel source and pinned submodules
         uses: actions/checkout@v4
@@ -58,94 +24,57 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
-      - name: Set up Java for Manager build
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install kernel build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex gcc-aarch64-linux-gnu \
             git libssl-dev lz4 make python3 zip zlib1g-dev
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Apply the known-good N971N U2 image metadata
+      - name: Apply N971N U2 image metadata
         shell: bash
         run: |
           set -euo pipefail
-          # Idempotent: no change if the user has already patched these values.
           sed -i 's/BOARD=SRPSD23A002KU/BOARD=SRPSD26B008KU/' build.sh
           sed -i 's/2023-04/2099-12/' build.sh
           grep -q 'BOARD=SRPSD26B008KU' build.sh
           grep -q '2099-12' build.sh
           chmod +x build.sh scripts/prepare-ksu-variant.sh
 
-      - name: Prepare selected KernelSU driver and config
+      - name: Prepare official KernelSU Next legacy driver
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ matrix.variant }}" in
-            rksu) REF="${{ inputs.rksu_ref }}" ;;
-            ksun) REF="${{ inputs.ksun_ref }}" ;;
-            official-susfs) REF="${{ inputs.official_ref }}" ;;
-          esac
-          bash scripts/prepare-ksu-variant.sh "${{ matrix.variant }}" "$REF"
+          bash scripts/prepare-ksu-variant.sh ksun legacy
 
-      - name: Build kernel and flashable ZIP
+      - name: Build N971N kernel and flashable ZIP
         shell: bash
+        env:
+          BUILD_VERSION: ${{ inputs.version || 'N971N-U2-KSUN-TEST1' }}
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}-${{ matrix.variant }}"
-          bash build.sh -m d1xks -v "$VERSION" -k y -l 13 -r y
+          bash build.sh -m d1xks -v "$BUILD_VERSION" -k y -l 13 -r y
 
-      - name: Verify final kernel configuration
+      - name: Verify kernel configuration and package
         shell: bash
         run: |
           set -euo pipefail
           test -s out/.config
           grep -q '^CONFIG_KSU=y$' out/.config
-          case "${{ matrix.variant }}" in
-            rksu)
-              grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
-              ;;
-            ksun)
-              grep -q '^CONFIG_KSU_KPROBE_HOOKS=y$' out/.config
-              ;;
-            official-susfs)
-              grep -q '^CONFIG_KSU_SUSFS=y$' out/.config
-              ;;
-          esac
-          mkdir -p build/export
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
+          test -d build/export
+          ZIP_COUNT=$(find build/export -maxdepth 1 -type f -name '*.zip' | wc -l)
+          test "$ZIP_COUNT" -ge 1
           cp build/ksu-source-info.txt build/export/
-          sha256sum build/export/*.zip > build/export/SHA256SUMS 2>/dev/null || true
+          (cd build/export && sha256sum *.zip > SHA256SUMS)
+          echo "KernelSU Next legacy config verified:"
+          grep -E '^CONFIG_KSU(=|_)' out/.config
 
-      - name: Build matching Manager from the same source revision
-        shell: bash
-        run: |
-          set -euo pipefail
-          MANAGER_DIR="${{ matrix.manager_dir }}"
-          if [[ ! -x "$MANAGER_DIR/gradlew" ]]; then
-            echo "Manager Gradle wrapper not found: $MANAGER_DIR/gradlew" >&2
-            exit 6
-          fi
-          cd "$MANAGER_DIR"
-          ./gradlew --no-daemon assembleDebug
-          mkdir -p "$GITHUB_WORKSPACE/build/export"
-          find app/build/outputs/apk -type f -name '*.apk' -exec cp {} "$GITHUB_WORKSPACE/build/export/Manager-${{ matrix.variant }}.apk" \;
-          test -s "$GITHUB_WORKSPACE/build/export/Manager-${{ matrix.variant }}.apk"
-
-      - name: Upload kernel ZIP, paired Manager APK and build metadata
+      - name: Upload kernel ZIP and build metadata
         uses: actions/upload-artifact@v4
         with:
-          name: N971N-U2-${{ matrix.variant }}-${{ github.run_number }}
+          name: N971N-U2-KSUN-Legacy-${{ github.run_number }}
           path: |
             build/export/*.zip
-            build/export/*.apk
             build/export/ksu-source-info.txt
             build/export/SHA256SUMS
           if-no-files-found: error
