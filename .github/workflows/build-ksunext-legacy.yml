@@ -1,0 +1,95 @@
+name: Build Official KernelSU Next Legacy for Note10 N971N
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-ksunext-legacy-d1xks
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout BatAxeKernel source
+        uses: actions/checkout@v4
+        with:
+          ref: build-ksunext-legacy-d1xks
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential cpio curl device-tree-compiler flex \
+            file git libelf-dev libncurses5-dev libncursesw5-dev libssl-dev \
+            lz4 lzop make perl python3 rsync unzip zip zstd
+
+      - name: Set up official KernelSU Next legacy source
+        run: |
+          git clone https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          cd KernelSU-Next
+          git checkout legacy
+          cd ..
+          sh KernelSU-Next/kernel/setup.sh legacy
+
+          echo "KernelSU Next legacy commit:"
+          git -C KernelSU-Next rev-parse HEAD
+          test -L drivers/kernelsu
+          grep -q 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile
+          grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+      - name: Align existing Note10 exec hook with official legacy API
+        run: |
+          # The Samsung kernel already has manual hook call sites.
+          # The official legacy source exports the ksud handler with this suffix.
+          sed -i 's/ksu_handle_execveat(/ksu_handle_execveat_ksud(/g' fs/exec.c
+          grep -q 'ksu_handle_execveat_ksud(' fs/exec.c
+          grep -q 'ksu_handle_execveat_sucompat(' fs/exec.c
+          grep -q 'ksu_handle_faccessat(' fs/open.c
+          grep -q 'ksu_handle_vfs_read(' fs/read_write.c
+          grep -q 'ksu_handle_stat(' fs/stat.c
+          grep -q 'ksu_handle_sys_reboot(' kernel/reboot.c
+
+      - name: Verify 4.14 manual-hook configuration
+        run: |
+          grep -q '^CONFIG_KSU=y$' arch/arm64/configs/ksu.config
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' arch/arm64/configs/ksu.config
+          ! grep -q '^CONFIG_KSU_KPROBES_HOOK=y$' arch/arm64/configs/ksu.config
+
+      - name: Build Note10 N971N kernel
+        env:
+          KSU_MANAGER_PACKAGE: com.rifsxd.ksunext
+          KSU_NEXT_MANAGER_SIZE: 0x3e6
+          KSU_NEXT_MANAGER_HASH: 79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7
+        run: |
+          chmod +x build.sh
+          bash build.sh -m d1xks -v KSUN-Legacy-4.14 -k y -l 18 -r y
+
+      - name: Download matching official Manager v3.1.0
+        run: |
+          mkdir -p build/export/manager
+          curl -fL \
+            https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.1.0/KernelSU_Next_v3.1.0_33024-release.apk \
+            -o build/export/manager/KernelSU_Next_v3.1.0_33024-release.apk
+          echo "5bf844d1431127dbb76042e9341de19216fdd7d394c01b3c96cc21216c8c69a5  build/export/manager/KernelSU_Next_v3.1.0_33024-release.apk" | sha256sum -c -
+
+      - name: Upload N971N kernel ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: BatAxeKernel-N971N-KernelSU-Next-Legacy-4.14-Clang18
+          path: build/export/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload matching KernelSU Next Manager
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelSU-Next-Manager-v3.1.0-33024
+          path: build/export/manager/*.apk
+          if-no-files-found: error
+          retention-days: 30
