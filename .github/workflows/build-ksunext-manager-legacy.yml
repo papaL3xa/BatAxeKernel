@@ -52,7 +52,7 @@ jobs:
           cd KernelSU-Next/manager
           python3 patch-ksunext-legacy-manager.py
           grep -q 'legacy.first > 0' app/src/main/cpp/ksu.cc
-          grep -q 'Manual\*' app/src/main/cpp/ksu.cc
+          grep -q 'LSM\*' app/src/main/cpp/ksu.cc
           grep -q 'Legacy API' app/src/main/cpp/ksu.cc
 
       - name: Build Manager APK (debug-signed, no kernel build)
