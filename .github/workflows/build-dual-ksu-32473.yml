@@ -1,0 +1,201 @@
+name: N971N Binary2 Dual KSU and Manager 32473
+
+on:
+  push:
+    branches:
+      - chatgpt/ksu-dual-32473
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-kernel:
+    name: Build ${{ matrix.variant }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: RKSU
+            source_variant: rksu
+            source_ref: 648e5988cf421172769f80ce07f86331b548c053
+            build_version: N971N-U2-RKSU-32473
+          - variant: KSUN-Legacy
+            source_variant: ksun
+            source_ref: legacy
+            build_version: N971N-U2-KSUN-32473
+    steps:
+      - name: Checkout BatAxeKernel
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex gcc-aarch64-linux-gnu \
+            git libssl-dev lz4 make python3 zip zlib1g-dev
+
+      - name: Apply Aurora V20 Binary 2 boot metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/BOARD=SRPSD23A002KU/BOARD=SRPSD26B008KU/' build.sh
+          sed -i 's/2023-04/2099-12/' build.sh
+          grep -q 'BOARD=SRPSD26B008KU' build.sh
+          grep -q '2099-12' build.sh
+          chmod +x build.sh scripts/prepare-ksu-variant.sh
+
+      - name: Prepare selected KSU driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare-ksu-variant.sh "${{ matrix.source_variant }}" "${{ matrix.source_ref }}"
+          test -L drivers/kernelsu
+          test -s build/ksu-source-info.txt
+          cat build/ksu-source-info.txt
+
+      - name: Build N971N Binary 2 kernel ZIP
+        shell: bash
+        env:
+          BUILD_VERSION: ${{ matrix.build_version }}
+          KSU_VERSION_OVERRIDE: "32473"
+        run: |
+          set -euo pipefail
+          bash build.sh -m d1xks -v "$BUILD_VERSION" -k y -l 13 -r y
+
+      - name: Verify kernel config, version and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s out/.config
+          grep -q '^CONFIG_KSU=y$' out/.config
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
+          test -d build/export
+          test "$(find build/export -maxdepth 1 -type f -name '*.zip' | wc -l)" -ge 1
+          cp build/ksu-source-info.txt build/export/
+          cp out/.config build/export/kernel.config
+          cp build.log build/export/build.log
+          (cd build/export && sha256sum *.zip > SHA256SUMS)
+          echo "Verified KSU config:"
+          grep -E '^CONFIG_KSU(=|_)' out/.config
+          echo "Source:"
+          cat build/ksu-source-info.txt
+
+      - name: Upload kernel package
+        uses: actions/upload-artifact@v4
+        with:
+          name: N971N-U2-${{ matrix.variant }}-32473-${{ github.run_number }}
+          path: |
+            build/export/*.zip
+            build/export/ksu-source-info.txt
+            build/export/kernel.config
+            build/export/build.log
+            build/export/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  build-manager:
+    name: Build KernelSU Next v3.0.1 Manager 32473
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout KernelSU Next v3.0.1
+        uses: actions/checkout@v4
+        with:
+          repository: KernelSU-Next/KernelSU-Next
+          ref: v3.0.1
+          fetch-depth: 0
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Setup Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup update stable
+          rustup target add aarch64-unknown-linux-musl
+          cargo install cross --git https://github.com/cross-rs/cross --rev 66845c1
+
+      - name: Build ksuinit
+        shell: bash
+        run: |
+          set -euo pipefail
+          LLVM_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="$LLVM_BIN/aarch64-linux-android26-clang"
+          export RUSTFLAGS="-C link-arg=-no-pie"
+          cd userspace/ksuinit
+          cargo build --target=aarch64-unknown-linux-musl --release
+          mkdir -p ../ksud/bin/aarch64
+          cp target/aarch64-unknown-linux-musl/release/ksuinit ../ksud/bin/aarch64/ksuinit
+
+      - name: Build ksud for Android ABIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CROSS_NO_WARNINGS=0 cross build --target aarch64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+          CROSS_NO_WARNINGS=0 cross build --target x86_64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+          mkdir -p manager/app/src/main/jniLibs/arm64-v8a manager/app/src/main/jniLibs/x86_64
+          cp userspace/ksud/target/aarch64-linux-android/release/ksud manager/app/src/main/jniLibs/arm64-v8a/libksud.so
+          cp userspace/ksud/target/x86_64-linux-android/release/ksud manager/app/src/main/jniLibs/x86_64/libksud.so
+
+      - name: Spoof package ID and pin manager version 32473
+        working-directory: manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x spoof
+          ./spoof
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build.gradle.kts")
+          s = p.read_text()
+          s = s.replace("return major * 30000 + commitCount", "return 32473")
+          s = s.replace("return getGitDescribe()", 'return "v3.0.1-32473"')
+          s = s.replace('"\${managerVersionName}-spoofed"', '"\${managerVersionName}"')
+          p.write_text(s)
+          p = Path("app/build.gradle.kts")
+          s = p.read_text().replace('"\${managerVersionName}-spoofed"', '"\${managerVersionName}"')
+          p.write_text(s)
+          PY
+          grep -q 'return 32473' build.gradle.kts
+          grep -q 'v3.0.1-32473' build.gradle.kts
+
+      - name: Build Manager APK
+        working-directory: manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew clean assembleRelease
+          APK="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "$APK" | tee manager-badging.txt
+          grep -q "versionCode='32473'" manager-badging.txt
+          grep -q "versionName='v3.0.1-32473'" manager-badging.txt
+          mkdir -p ../manager-export
+          cp "$APK" ../manager-export/KernelSU-Next-v3.0.1-32473-spoofed.apk
+          cp manager-badging.txt ../manager-export/
+
+      - name: Upload Manager APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelSU-Next-Manager-v3.0.1-32473-${{ github.run_number }}
+          path: manager-export/*
+          if-no-files-found: error
+          retention-days: 30
