@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Patch the official KernelSU Next v3.0.1 manager for the legacy 4.14 KSU ABI."""
+"""Patch the official KernelSU Next v3.0.1 manager for the legacy 4.14 KSU ABI.
+
+Build target: legacy KSU_VERSION 32473 / Android 12 / Linux 4.14.
+"""
 from pathlib import Path
 
 path = Path("app/src/main/cpp/ksu.cc")
