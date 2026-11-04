@@ -1,0 +1,112 @@
+name: Build KernelSU Next Manager for RSUKSU 32473
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-ksunext-manager-32473
+
+permissions:
+  contents: read
+
+jobs:
+  build-manager:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Checkout KernelSU Next v3.0.1
+        uses: actions/checkout@v4
+        with:
+          repository: KernelSU-Next/KernelSU-Next
+          ref: v3.0.1
+          path: ksunext
+          fetch-depth: 0
+
+      - name: Patch manager native compatibility for RSUKSU 32473
+        working-directory: ksunext/manager
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          header = Path("app/src/main/cpp/ksu.h")
+          source = Path("app/src/main/cpp/ksu.cc")
+
+          h = header.read_text()
+          old_define = "#define KSU_APP_PROFILE_VER 2"
+          if old_define not in h:
+              raise SystemExit("Expected KSU_APP_PROFILE_VER 2 was not found; refusing an uncertain patch")
+          header.write_text(h.replace(old_define, "#define KSU_APP_PROFILE_VER 3", 1))
+
+          s = source.read_text()
+          old_hook = """const char* get_hook_mode(void)
+          {
+              static struct ksu_get_hook_mode_cmd cmd = {0};
+
+              if (ksuctl(KSU_IOCTL_GET_HOOK_MODE, &cmd) == 0)
+                  return cmd.mode;
+
+              return "Unknown";
+          }"""
+          new_hook = """const char* get_hook_mode(void)
+          {
+              // RSUKSU 32473 does not expose KSU_IOCTL_GET_HOOK_MODE (98).
+              return "Not exposed by RSUKSU";
+          }"""
+          old_tag = """const char* get_version_tag(void)
+          {
+              static struct ksu_get_version_tag_cmd cmd = {0};
+
+              if (ksuctl(KSU_IOCTL_GET_VERSION_TAG, &cmd) == 0)
+                  return cmd.tag;
+
+              return "Unknown";
+          }"""
+          new_tag = """const char* get_version_tag(void)
+          {
+              // Identify the driver family without inventing a kernel-provided tag.
+              return "RSUKSU";
+          }"""
+          if old_hook not in s:
+              raise SystemExit("Expected get_hook_mode implementation was not found; refusing an uncertain patch")
+          if old_tag not in s:
+              raise SystemExit("Expected get_version_tag implementation was not found; refusing an uncertain patch")
+          s = s.replace(old_hook, new_hook, 1)
+          s = s.replace(old_tag, new_tag, 1)
+          source.write_text(s)
+          print("Patched: app-profile ABI v3, hook-mode fallback, RSUKSU family tag")
+          PY
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses and install build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.1.0"
+
+      - name: Build Manager APK
+        working-directory: ksunext/manager
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon clean :app:assembleRelease --stacktrace
+          echo "Built APK(s):"
+          find app/build/outputs/apk -type f -name '*.apk' -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelSU-Next-Manager-v3.0.1-RSUKSU-32473
+          path: ksunext/manager/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
