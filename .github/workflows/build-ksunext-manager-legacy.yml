@@ -1,4 +1,4 @@
-name: Build KernelSU Next Manager (legacy 32473 compatibility)
+name: Build KernelSU Next Manager v3.0.1 (legacy 32473)
 
 on:
   workflow_dispatch:
@@ -15,9 +15,9 @@ permissions:
 jobs:
   build-manager:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
-      - name: Checkout BatAxeKernel workflow files
+      - name: Checkout workflow files
         uses: actions/checkout@v4
         with:
           ref: manager-ksunext-legacy-32473
@@ -28,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install Android SDK components
+      - name: Install Android SDK components for v3.0.1
         shell: bash
         run: |
           set -euo pipefail
@@ -39,27 +39,49 @@ jobs:
           echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" --install \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "ndk;27.2.12479018" \
-            "cmake;3.22.1"
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;29.0.14206865"
 
-      - name: Fetch official KernelSU Next Manager v3.1.0
+      - name: Fetch official KernelSU Next v3.0.1 source
         run: |
-          git clone --depth 1 --branch v3.1.0 \
+          git clone --depth 1 --branch v3.0.1 \
             https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
           git -C KernelSU-Next rev-parse HEAD
+          grep -q 'val managerVersionCode by extra(getVersionCode())' KernelSU-Next/manager/build.gradle.kts
 
-      - name: Apply legacy 4.14 compatibility patch
+      - name: Pin release version and build number 32967
+        working-directory: KernelSU-Next/manager
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build.gradle.kts")
+          s = p.read_text()
+          s = s.replace(
+              'val managerVersionCode by extra(getVersionCode())',
+              'val managerVersionCode by extra(32967)',
+              1
+          )
+          s = s.replace(
+              'val managerVersionName by extra(getVersionName())',
+              'val managerVersionName by extra("v3.0.1-spoofed-legacy32473")',
+              1
+          )
+          p.write_text(s)
+          assert 'extra(32967)' in s
+          assert 'v3.0.1-spoofed-legacy32473' in s
+          PY
+
+      - name: Patch v3.0.1 legacy 4.14 compatibility
         run: |
           cp .github/scripts/patch-ksunext-legacy-manager.py KernelSU-Next/manager/
           cd KernelSU-Next/manager
           python3 patch-ksunext-legacy-manager.py
           grep -q 'legacy.first > 0' app/src/main/cpp/ksu.cc
-          grep -q 'LSM\*' app/src/main/cpp/ksu.cc
+          grep -q 'LSM (legacy)' app/src/main/cpp/ksu.cc
           grep -q 'Legacy API' app/src/main/cpp/ksu.cc
 
-      - name: Build Manager APK (debug-signed, no kernel build)
+      - name: Build APK from official v3.0.1
         working-directory: KernelSU-Next/manager
         run: |
           chmod +x gradlew
@@ -67,10 +89,10 @@ jobs:
           find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print
           test -n "$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
-      - name: Upload compatible Manager APK
+      - name: Upload patched v3.0.1 Manager APK
         uses: actions/upload-artifact@v4
         with:
-          name: KernelSU-Next-Manager-v3.1.0-legacy-32473
+          name: KernelSU-Next-v3.0.1-spoofed-32967-legacy-32473
           path: KernelSU-Next/manager/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
