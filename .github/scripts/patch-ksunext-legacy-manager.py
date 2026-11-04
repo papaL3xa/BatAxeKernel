@@ -41,9 +41,9 @@ new_hook = """const char* get_hook_mode(void)
         return cmd.mode;
 
     // The legacy driver has no GET_HOOK_MODE ioctl. Its Note10 integration
-    // uses the existing manual hook call-sites, so label this as a fallback.
+    // uses LSM security hooks (ksu_lsm_hook_init), so label this as a source-verified fallback.
     const auto legacy = legacy_get_info();
-    return legacy.first > 0 ? "Manual*" : "Unknown";
+    return legacy.first > 0 ? "LSM*" : "Unknown";
 }"""
 
 old_tag = """const char* get_version_tag(void)
