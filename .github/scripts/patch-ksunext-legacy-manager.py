@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility patch for KernelSU Next Manager on legacy KSU 4.14 drivers.
-
-The old BatAxe/rsuntk driver exposes version/flags through the legacy prctl
-interface, but does not implement GET_HOOK_MODE or GET_VERSION_TAG ioctls.
-"""
+"""Patch the official KernelSU Next v3.0.1 manager for the legacy 4.14 KSU ABI."""
 from pathlib import Path
 
 path = Path("app/src/main/cpp/ksu.cc")
@@ -19,7 +15,7 @@ new_version = """uint32_t get_version() {
         return info.version;
     }
 
-    // Legacy 4.14 KSU drivers report their real numeric version via prctl.
+    // v3.0.1 already ships this legacy prctl reader in ksu.h.
     const auto legacy = legacy_get_info();
     return legacy.first > 0 ? static_cast<uint32_t>(legacy.first) : 0;
 }"""
@@ -40,10 +36,9 @@ new_hook = """const char* get_hook_mode(void)
     if (ksuctl(KSU_IOCTL_GET_HOOK_MODE, &cmd) == 0 && cmd.mode[0] != '\\0')
         return cmd.mode;
 
-    // The legacy driver has no GET_HOOK_MODE ioctl. Its Note10 integration
-    // uses LSM security hooks (ksu_lsm_hook_init), so label this as a source-verified fallback.
+    // This legacy 4.14 kernel uses the LSM hook integration.
     const auto legacy = legacy_get_info();
-    return legacy.first > 0 ? "LSM*" : "Unknown";
+    return legacy.first > 0 ? "LSM (legacy)" : "Unavailable";
 }"""
 
 old_tag = """const char* get_version_tag(void)
@@ -62,9 +57,9 @@ new_tag = """const char* get_version_tag(void)
     if (ksuctl(KSU_IOCTL_GET_VERSION_TAG, &cmd) == 0 && cmd.tag[0] != '\\0')
         return cmd.tag;
 
-    // This driver predates the version-tag ioctl; do not invent a tag.
+    // The legacy ABI has no version-tag ioctl.
     const auto legacy = legacy_get_info();
-    return legacy.first > 0 ? "Legacy API" : "Unknown";
+    return legacy.first > 0 ? "Legacy API" : "Unavailable";
 }"""
 
 for old, new, label in (
@@ -73,8 +68,8 @@ for old, new, label in (
     (old_tag, new_tag, "get_version_tag"),
 ):
     if old not in src:
-        raise SystemExit(f"Expected upstream {label} implementation not found; refusing an unsafe patch")
+        raise SystemExit(f"Expected v3.0.1 {label} implementation not found; refusing patch")
     src = src.replace(old, new, 1)
 
 path.write_text(src)
-print("Patched legacy version, hook-mode and version-tag fallbacks.")
+print("Patched v3.0.1 legacy version, hook mode and version tag.")
