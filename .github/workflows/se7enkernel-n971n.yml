@@ -1,9 +1,10 @@
-name: Se7enKernel N971N KSUN Build
+name: Se7enKernel N971N KSUN + Matching Manager
 
 on:
   push:
     branches:
       - se7en-kernel-n971n
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,52 +12,117 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     steps:
-      - name: Checkout yesterday's boot-tested source
+      - name: Checkout boot-tested BatAxeKernel base
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          submodules: false
 
-      - name: Set timezone and dependencies
+      - name: Fetch latest KernelSU submodule from its remote default branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- KernelSU
+          git submodule update --init --remote --depth=1 KernelSU
+          test -f KernelSU/kernel/Makefile
+          KSU_SHA="$(git -C KernelSU rev-parse HEAD)"
+          KSU_REMOTE="$(git -C KernelSU remote get-url origin)"
+          KSU_VERSION="$(sed -n 's/.*-DKSU_VERSION=\\([0-9][0-9]*\\).*/\\1/p' KernelSU/kernel/Makefile | head -n 1)"
+          test -n "$KSU_VERSION"
+          {
+            echo "KSU_SHA=$KSU_SHA"
+            echo "KSU_REMOTE=$KSU_REMOTE"
+            echo "KSU_VERSION=$KSU_VERSION"
+          } >> "$GITHUB_ENV"
+          echo "Latest remote KernelSU commit: $KSU_SHA"
+          echo "Kernel driver version: $KSU_VERSION"
+          echo "Remote: $KSU_REMOTE"
+
+      - name: Set timezone and install kernel build dependencies
         run: |
           sudo timedatectl set-timezone Asia/Jakarta
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
 
-      - name: Rename kernel and build N971N
+      - name: Set Se7enKernel name and build N971N
         shell: bash
         run: |
           set -euo pipefail
           sed -i 's/^    KERNEL_NAME=BatAxeKernel$/    KERNEL_NAME=Se7enKernel/' build.sh
           grep -q '^    KERNEL_NAME=Se7enKernel$' build.sh
           chmod +x build.sh
+          # Preserve the known boot-tested build parameters; KSU was advanced above.
           bash build.sh -m d1xks -v N971N-KSUN -k y -l 13 -r n
+          test -d build/out/d1xks/zip
+          test -s build/out/d1xks/zip/boot.img
 
-      - name: Record exact KSU source and driver version
+      - name: Set up Java 21 and Android SDK for Manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Manager SDK and NDK
+        run: |
+          sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865"
+
+      - name: Build matching Manager from the exact same KernelSU commit
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/out/d1xks/zip
-          {
-            echo "Kernel source commit: $(git rev-parse HEAD)"
-            echo "KernelSU submodule commit: $(git -C KernelSU rev-parse HEAD)"
-            echo "KernelSU remote: $(git -C KernelSU remote get-url origin)"
-            echo "KSU_VERSION declarations:"
-            grep -R -n --include='Makefile' --include='*.mk' 'KSU_VERSION' KernelSU | head -30 || true
-            echo "Kernel localversion:"
-            grep -n 'CONFIG_LOCALVERSION=' arch/arm64/configs/bataxe-d1xks_defconfig
-          } > build/out/d1xks/zip/ksu-source-info.txt
-          cat build/out/d1xks/zip/ksu-source-info.txt
+          MANAGER_DIR="$GITHUB_WORKSPACE/KernelSU/manager"
+          test -x "$MANAGER_DIR/gradlew"
+          cd "$MANAGER_DIR"
+          python3 - "$KSU_VERSION" <<'PY'
+          import pathlib, re, sys
+          version = int(sys.argv[1])
+          p = pathlib.Path("build.gradle.kts")
+          source = p.read_text()
+          pattern = r"return\\s+29971\\s*\\+\\s*commitCount"
+          updated, count = re.subn(pattern, f"return {version}", source, count=1)
+          if count != 1:
+              raise SystemExit("Cannot safely pin Manager versionCode in this source revision")
+          p.write_text(updated)
+          print(f"Pinned Manager versionCode={version}")
+          PY
+          ./gradlew --no-daemon assembleDebug
+          APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          mkdir -p "$GITHUB_WORKSPACE/build/export"
+          cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KSUN-Manager-v$KSU_VERSION-debug.apk"
 
-      - name: Generate checksums
+      - name: Record exact source, config and checksums
+        shell: bash
         run: |
-          cd build/out/d1xks/zip
-          sha256sum * > SHA256SUMS
+          set -euo pipefail
+          mkdir -p build/export
+          {
+            echo "Kernel base commit: $(git rev-parse HEAD)"
+            echo "KernelSU remote: $KSU_REMOTE"
+            echo "KernelSU commit: $KSU_SHA"
+            echo "KernelSU driver version: $KSU_VERSION"
+            echo "Kernel name: Se7enKernel"
+            echo "Device: SM-N971N (d1xks)"
+            echo "Kernel localversion:"
+            grep '^CONFIG_LOCALVERSION=' out/.config || true
+          } > build/export/build-info.txt
+          (cd build/out/d1xks/zip && sha256sum * > "$GITHUB_WORKSPACE/build/export/kernel-SHA256SUMS")
+          (cd build/export && sha256sum *.apk > manager-SHA256SUMS)
+          cat build/export/build-info.txt
+          cat build/export/kernel-SHA256SUMS
+          cat build/export/manager-SHA256SUMS
 
-      - name: Upload Se7enKernel package and KSU metadata
+      - name: Upload Se7enKernel package and matched Manager
         uses: actions/upload-artifact@v4
         with:
           name: Se7enKernel-N971N-KSUN-${{ github.run_number }}
-          path: build/out/d1xks/zip/*
+          path: |
+            build/out/d1xks/zip/*
+            build/export/*
           if-no-files-found: error
           retention-days: 30
