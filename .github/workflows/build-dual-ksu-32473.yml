@@ -168,10 +168,10 @@ jobs:
           s = p.read_text()
           s = s.replace("return major * 30000 + commitCount", "return 32473")
           s = s.replace("return getGitDescribe()", 'return "v3.0.1-32473"')
-          s = s.replace('"\${managerVersionName}-spoofed"', '"\${managerVersionName}"')
+          s = s.replace('"${managerVersionName}-spoofed"', '"${managerVersionName}"')
           p.write_text(s)
           p = Path("app/build.gradle.kts")
-          s = p.read_text().replace('"\${managerVersionName}-spoofed"', '"\${managerVersionName}"')
+          s = p.read_text().replace('"${managerVersionName}-spoofed"', '"${managerVersionName}"')
           p.write_text(s)
           PY
           grep -q 'return 32473' build.gradle.kts
