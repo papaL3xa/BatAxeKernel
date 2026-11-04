@@ -1,0 +1,115 @@
+name: Build KernelSU Next Manager 33318 (N971N U2 legacy)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-manager:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout KernelSU-Next manager source matching kernel version 33318
+        uses: actions/checkout@v4
+        with:
+          repository: KernelSU-Next/KernelSU-Next
+          ref: dev
+          fetch-depth: 0
+          path: KernelSU-Next
+
+      - name: Select exact manager commit by versionCode
+        shell: bash
+        working-directory: KernelSU-Next
+        run: |
+          set -euo pipefail
+          TARGET_SHA="$(git rev-list --reverse origin/dev | sed -n '3319p')"
+          test -n "$TARGET_SHA"
+          git checkout --detach "$TARGET_SHA"
+          COUNT="$(git rev-list --count HEAD)"
+          VERSION_CODE="$((30000 + COUNT))"
+          echo "MANAGER_COMMIT=$TARGET_SHA" >> "$GITHUB_ENV"
+          echo "MANAGER_COMMIT_COUNT=$COUNT" >> "$GITHUB_ENV"
+          echo "MANAGER_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          test "$COUNT" = "3318"
+          test "$VERSION_CODE" = "33318"
+          echo "Selected manager source: $TARGET_SHA"
+          echo "Manager versionCode: $VERSION_CODE"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config build-essential             curl git zip unzip python3 openjdk-21-jdk
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools "build-tools;36.1.0"
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+
+      - name: Setup Rust
+        run: |
+          rustup update stable
+          rustup target add aarch64-linux-android
+          cargo install cross --git https://github.com/cross-rs/cross --rev 66845c1
+
+      - name: Build matching ARM64 ksud
+        working-directory: KernelSU-Next
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          LLVM_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CLANG_PATH="$LLVM_BIN/aarch64-linux-android26-clang"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG_PATH"
+          export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot -I$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android -I$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+          clang --target=aarch64-linux-gnu -c -nostdlib -o userspace/ksud/.lkm_image_bootstrap.o userspace/ksud/src/lkm_image_bootstrap.S
+          CROSS_NO_WARNINGS=0 cross build --target aarch64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+          test -s userspace/ksud/target/aarch64-linux-android/release/ksud
+
+      - name: Prepare signing key and Manager native binary
+        working-directory: KernelSU-Next/manager
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp ../userspace/ksud/target/aarch64-linux-android/release/ksud app/src/main/jniLibs/arm64-v8a/libksud.so
+          keytool -genkeypair -keystore manager-33318.jks -storepass manager33318 -keypass manager33318             -alias manager33318 -keyalg RSA -keysize 2048 -validity 10000             -dname "CN=KernelSU Next Manager 33318"
+          {
+            echo "KEYSTORE_FILE=manager-33318.jks"
+            echo "KEYSTORE_PASSWORD=manager33318"
+            echo "KEY_ALIAS=manager33318"
+            echo "KEY_PASSWORD=manager33318"
+          } >> gradle.properties
+
+      - name: Build Manager APK
+        working-directory: KernelSU-Next/manager
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon clean assembleRelease
+          APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          cp "$APK" "$GITHUB_WORKSPACE/output/KernelSU-Next-Manager-v3-legacy-33318.apk"
+          "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "$GITHUB_WORKSPACE/output/KernelSU-Next-Manager-v3-legacy-33318.apk" | tee "$GITHUB_WORKSPACE/output/badging.txt"
+          grep -q "versionCode='33318'" "$GITHUB_WORKSPACE/output/badging.txt"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --print-certs "$GITHUB_WORKSPACE/output/KernelSU-Next-Manager-v3-legacy-33318.apk" | tee "$GITHUB_WORKSPACE/output/signature.txt"
+          printf 'manager_source_commit=%s\nmanager_commit_count=%s\nmanager_versionCode=%s\nkernel_versionCode=33318\n'             "$MANAGER_COMMIT" "$MANAGER_COMMIT_COUNT" "$MANAGER_VERSION_CODE" > "$GITHUB_WORKSPACE/output/build-info.txt"
+
+      - name: Upload Manager APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelSU-Next-Manager-33318-N971N-U2
+          path: output/*
+          if-no-files-found: error
+          retention-days: 30
