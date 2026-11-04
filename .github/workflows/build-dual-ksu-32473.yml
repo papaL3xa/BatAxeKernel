@@ -118,9 +118,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          SDK_ROOT=/usr/local/lib/android/sdk
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/cmdline-tools/16.0/bin" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/29.0.14206865" >> "$GITHUB_ENV"
 
       - name: Setup Rust toolchain
         shell: bash
