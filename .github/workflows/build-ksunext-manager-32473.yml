@@ -73,25 +73,7 @@ jobs:
           s = s.replace(old_hook, new_hook, 1)
           s = s.replace(old_tag, new_tag, 1)
           source.write_text(s)
-          print("Patched: app-profile ABI v3, hook-mode fallback, RSUKSU family tag")
-          PY
-
-      - name: Set Manager version to 32473
-        working-directory: ksunext/manager
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("build.gradle.kts")
-          s = p.read_text()
-          old_code = "val managerVersionCode by extra(getVersionCode())"
-          old_name = "val managerVersionName by extra(getVersionName())"
-          if old_code not in s or old_name not in s:
-              raise SystemExit("Could not find the exact manager version declarations; refusing to build with an unintended version")
-          s = s.replace(old_code, "val managerVersionCode by extra(32473)", 1)
-          s = s.replace(old_name, 'val managerVersionName by extra("v3.0.1-32473")', 1)
-          p.write_text(s)
-          print("Manager versionCode=32473, versionName=v3.0.1-32473")
+          print("Patched: preserve app-profile ABI v2, hook-mode fallback, RSUKSU family tag")
           PY
 
       - name: Pin Manager APK version to kernel driver 32473
