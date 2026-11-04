@@ -23,7 +23,7 @@ jobs:
         working-directory: KernelSU-Next
         run: |
           set -euo pipefail
-          TARGET_SHA="$(git rev-list --reverse origin/dev | sed -n '3319p')"
+          TARGET_SHA="$(git rev-list --reverse origin/dev | sed -n '3318p')"
           test -n "$TARGET_SHA"
           git checkout --detach "$TARGET_SHA"
           COUNT="$(git rev-list --count HEAD)"
