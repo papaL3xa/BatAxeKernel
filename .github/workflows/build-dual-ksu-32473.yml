@@ -114,9 +114,6 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Setup Android SDK and NDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK components
         shell: bash
         run: |
