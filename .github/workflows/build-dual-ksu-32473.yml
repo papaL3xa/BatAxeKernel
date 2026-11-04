@@ -126,7 +126,9 @@ jobs:
           SDK_ROOT="$ANDROID_HOME"
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -x "$SDKMANAGER"
+          set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/29.0.14206865" >> "$GITHUB_ENV"
 
