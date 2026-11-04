@@ -1,0 +1,120 @@
+name: Build RKSU Manager for BatAxeKernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-rksu-manager-648e598
+
+permissions:
+  contents: read
+
+jobs:
+  build-ksud:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact RKSU source
+        uses: actions/checkout@v6
+        with:
+          repository: rsuntk/KernelSU
+          ref: 648e5988cf421172769f80ce07f86331b548c053
+          path: rksu
+          fetch-depth: 0
+
+      - name: Setup Rust targets
+        run: |
+          rustup update stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+
+      - name: Build ksud for arm64
+        working-directory: rksu
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          source .github/scripts/setup-rust-build.sh aarch64-linux-android 26
+          cargo build --target aarch64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+
+      - name: Build ksud for armv7
+        working-directory: rksu
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          source .github/scripts/setup-rust-build.sh armv7-linux-androideabi 26
+          cargo build --target armv7-linux-androideabi --release --manifest-path ./userspace/ksud/Cargo.toml
+
+      - name: Stage ksud binaries
+        working-directory: rksu
+        run: |
+          mkdir -p ../dist/ksud/aarch64-linux-android ../dist/ksud/armv7-linux-androideabi
+          cp target/aarch64-linux-android/release/ksud ../dist/ksud/aarch64-linux-android/ksud
+          cp target/armv7-linux-androideabi/release/ksud ../dist/ksud/armv7-linux-androideabi/ksud
+
+      - name: Upload ksud binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: ksud-binaries
+          path: dist/ksud/
+
+  build-manager:
+    needs: build-ksud
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manager_type: [normal, spoofed]
+    steps:
+      - name: Checkout exact RKSU source
+        uses: actions/checkout@v6
+        with:
+          repository: rsuntk/KernelSU
+          ref: 648e5988cf421172769f80ce07f86331b548c053
+          path: rksu
+          fetch-depth: 0
+
+      - name: Download ksud binaries
+        uses: actions/download-artifact@v8
+        with:
+          name: ksud-binaries
+          path: rksu/artifacts/ksud
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Prepare manager
+        working-directory: rksu/manager
+        run: |
+          if [ "${{ matrix.manager_type }}" = "spoofed" ]; then
+            chmod +x ./spoofer
+            bash ./spoofer
+          fi
+          mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a
+          cp ../artifacts/ksud/aarch64-linux-android/ksud app/src/main/jniLibs/arm64-v8a/libksud.so
+          cp ../artifacts/ksud/armv7-linux-androideabi/ksud app/src/main/jniLibs/armeabi-v7a/libksud.so
+          echo "RKSU source commit: 648e5988cf421172769f80ce07f86331b548c053"
+          echo "Manager version code: $((29971 + $(git -C .. rev-list --count HEAD)))"
+
+      - name: Build Manager APK
+        working-directory: rksu/manager
+        run: ./gradlew clean assembleRelease --stacktrace
+
+      - name: Upload Manager APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: rksu-manager-${{ matrix.manager_type }}
+          path: rksu/manager/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
