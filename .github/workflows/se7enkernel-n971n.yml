@@ -29,7 +29,7 @@ jobs:
           test -f KernelSU/kernel/Makefile
           KSU_SHA="$(git -C KernelSU rev-parse HEAD)"
           KSU_REMOTE="$(git -C KernelSU remote get-url origin)"
-          KSU_VERSION="$(sed -n 's/.*-DKSU_VERSION=\\([0-9][0-9]*\\).*/\\1/p' KernelSU/kernel/Makefile | head -n 1)"
+          KSU_VERSION="$(grep -oE -- '-DKSU_VERSION=[0-9]+' KernelSU/kernel/Makefile | head -n 1 | cut -d= -f2)"
           test -n "$KSU_VERSION"
           {
             echo "KSU_SHA=$KSU_SHA"
@@ -83,7 +83,7 @@ jobs:
           version = int(sys.argv[1])
           p = pathlib.Path("build.gradle.kts")
           source = p.read_text()
-          pattern = r"return\\s+29971\\s*\\+\\s*commitCount"
+          pattern = r"return\s+29971\s*\+\s*commitCount"
           updated, count = re.subn(pattern, f"return {version}", source, count=1)
           if count != 1:
               raise SystemExit("Cannot safely pin Manager versionCode in this source revision")
@@ -93,6 +93,7 @@ jobs:
           ./gradlew --no-daemon assembleDebug
           APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -q "versionCode='$KSU_VERSION'"
           mkdir -p "$GITHUB_WORKSPACE/build/export"
           cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KSUN-Manager-v$KSU_VERSION-debug.apk"
 
