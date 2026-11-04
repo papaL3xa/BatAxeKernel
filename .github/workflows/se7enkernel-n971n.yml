@@ -1,0 +1,62 @@
+name: Se7enKernel N971N KSUN Build
+
+on:
+  push:
+    branches:
+      - se7en-kernel-n971n
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout yesterday's boot-tested source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set timezone and dependencies
+        run: |
+          sudo timedatectl set-timezone Asia/Jakarta
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential gcc-aarch64-linux-gnu clang lld llvm
+
+      - name: Rename kernel and build N971N
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/^    KERNEL_NAME=BatAxeKernel$/    KERNEL_NAME=Se7enKernel/' build.sh
+          grep -q '^    KERNEL_NAME=Se7enKernel$' build.sh
+          chmod +x build.sh
+          bash build.sh -m d1xks -v N971N-KSUN -k y -l 13 -r n
+
+      - name: Record exact KSU source and driver version
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/out/d1xks/zip
+          {
+            echo "Kernel source commit: $(git rev-parse HEAD)"
+            echo "KernelSU submodule commit: $(git -C KernelSU rev-parse HEAD)"
+            echo "KernelSU remote: $(git -C KernelSU remote get-url origin)"
+            echo "KSU_VERSION declarations:"
+            grep -R -n --include='Makefile' --include='*.mk' 'KSU_VERSION' KernelSU | head -30 || true
+            echo "Kernel localversion:"
+            grep -n 'CONFIG_LOCALVERSION=' arch/arm64/configs/bataxe-d1xks_defconfig
+          } > build/out/d1xks/zip/ksu-source-info.txt
+          cat build/out/d1xks/zip/ksu-source-info.txt
+
+      - name: Generate checksums
+        run: |
+          cd build/out/d1xks/zip
+          sha256sum * > SHA256SUMS
+
+      - name: Upload Se7enKernel package and KSU metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Se7enKernel-N971N-KSUN-${{ github.run_number }}
+          path: build/out/d1xks/zip/*
+          if-no-files-found: error
+          retention-days: 30
