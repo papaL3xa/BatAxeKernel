@@ -56,6 +56,15 @@ jobs:
               )
           print(f"Official KernelSU-Next commit: {found}")
           print(f"Kernel/Manager version: {30000 + target}")
+          # IMPORTANT: actually switch the working tree to the selected commit.
+          # Merely recording KSUN_SHA leaves the checkout at current dev.
+          subprocess.check_call(["git", "-C", repo, "checkout", "--detach", found])
+          actual = subprocess.check_output(
+              ["git", "-C", repo, "rev-parse", "HEAD"], text=True
+          ).strip()
+          if actual != found:
+              sys.exit(f"KSUN checkout mismatch: expected {found}, got {actual}")
+          print(f"Verified checked-out KernelSU-Next HEAD: {actual}")
           with open(__import__("os").environ["GITHUB_ENV"], "a") as f:
               f.write(f"KSUN_SHA={found}\n")
               f.write("KSUN_VERSION=32473\n")
