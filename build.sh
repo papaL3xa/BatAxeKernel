@@ -105,18 +105,20 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --llvm|-l)
-            USE_NEUTRON=true
+            LLVM="$2"
 
-            if [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
+            if [[ "$LLVM" =~ ^[0-9]+$ ]] && [[ "$LLVM" -ge 12 ]] && [[ "$LLVM" -le 20 ]]; then
                 USE_NEUTRON=false
-            fi
-
-            if [[ -n "$2" && "$2" != -* ]]; then
-                NEUTRON="$2"
                 shift 2
             else
-                NEUTRON=42069420
-                shift
+                USE_NEUTRON=true
+                if [[ -n "$LLVM" && "$LLVM" != -* ]]; then
+                    NEUTRON="$LLVM"
+                    shift 2
+                else
+                    NEUTRON=42069420
+                    shift
+                fi
             fi
             ;;
         *)\
@@ -130,7 +132,7 @@ if [ -z $MODEL ]; then
     MODEL=d2s
 fi
 
-KERNEL_DEFCONFIG=stardust-"$MODEL"_defconfig
+KERNEL_DEFCONFIG=skyline-"$MODEL"_defconfig
 case $MODEL in
 beyond0lte)
     SOC=0
@@ -416,7 +418,7 @@ kernelsu ()
     if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
         quotes "Patching KernelSU to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/KernelSUBataxe.patch")
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/KernelSU.patch")
         separator
         check "KernelSU"
     fi
@@ -445,7 +447,7 @@ kernelsu ()
         separator
         quotes "Patching SuSFS to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patches/susfs159Bataxe.patch")
+        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/SuSFS.patch")
         separator
         check "SuSFS"
     fi
@@ -472,7 +474,7 @@ kernel ()
     sed -i "s/CONFIG_LOCALVERSION=\"\"/CONFIG_LOCALVERSION=\"-$KERNEL_NAME-$KERNEL_VERSION-$DEVICE-$MODEL\"/" arch/arm64/configs/$KERNEL_DEFCONFIG
     sed -i "s/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/" arch/arm64/configs/$KERNEL_DEFCONFIG
 
-    DEFCONFIG="$KERNEL_DEFCONFIG stardust.config $KSU_NEXT"
+    DEFCONFIG="$KERNEL_DEFCONFIG skyline.config $KSU_NEXT"
 
     separator
     noquotes "Building Kernel Using $KERNEL_DEFCONFIG"
