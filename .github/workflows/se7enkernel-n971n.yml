@@ -25,7 +25,8 @@ jobs:
         run: |
           set -euo pipefail
           git clone --no-checkout https://github.com/rsuntk/KernelSU.git KernelSU
-          git -C KernelSU checkout --detach 88e37d606fc12758421c3e36b0f61499610cfe8d
+          git -C KernelSU fetch origin 88e37d606fc12758421c3e36b0f61499610cfe8d
+          git -C KernelSU checkout --detach FETCH_HEAD
           KSU_KERNEL_SHA="$(git -C KernelSU rev-parse HEAD)"
           KSU_KERNEL_COUNT="$(git -C KernelSU rev-list --count HEAD)"
           KSU_KERNEL_VERSION="$((30000 + KSU_KERNEL_COUNT))"
@@ -48,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --no-checkout https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          git -C KernelSU-Next fetch origin dev
           git -C KernelSU-Next checkout --detach 9b5e60912d536ed4c38988c9b3a3ac48f1138d67
           KSUN_MANAGER_SHA="$(git -C KernelSU-Next rev-parse HEAD)"
           KSUN_MANAGER_COUNT="$(git -C KernelSU-Next rev-list --count HEAD)"
