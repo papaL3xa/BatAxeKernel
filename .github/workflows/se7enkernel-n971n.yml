@@ -65,13 +65,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sh KernelSU-Next/kernel/setup.sh "$KSUN_SHA"
+          test -d KernelSU-Next/kernel
+          mkdir -p drivers
+          ln -sfn ../KernelSU-Next/kernel drivers/kernelsu
+          grep -qF 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -qF 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
           test -L drivers/kernelsu
           test -f drivers/kernelsu/Kbuild
-          grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
-          grep -q 'kernelsu' drivers/Makefile
-          echo "KernelSU-Next integration points verified."
-
+          grep -qF 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -qF 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile
+          echo "Official KernelSU-Next symlink, Kconfig and Makefile integration verified."
+          
       - name: Set timezone and install kernel build dependencies
         run: |
           sudo timedatectl set-timezone Asia/Jakarta
@@ -111,7 +115,7 @@ jobs:
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;28.1.13356709"
 
       - name: Build official Manager from the exact same KernelSU-Next commit
         shell: bash
@@ -119,11 +123,15 @@ jobs:
           set -euo pipefail
           MANAGER_DIR="$GITHUB_WORKSPACE/KernelSU-Next/manager"
           test -x "$MANAGER_DIR/gradlew"
+          # Keep the official Manager implementation untouched; align only the
+          # Android package versionCode label with the exact 32473 kernel build.
+          sed -i 's/val managerVersionCode by extra(getVersionCode())/val managerVersionCode by extra(32473)/' "$MANAGER_DIR/build.gradle.kts"
+          grep -q 'val managerVersionCode by extra(32473)' "$MANAGER_DIR/build.gradle.kts"
           cd "$MANAGER_DIR"
           ./gradlew --no-daemon assembleDebug
           APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "$APK" | grep -q "versionCode='32473'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "versionCode='32473'"
           mkdir -p "$GITHUB_WORKSPACE/build/export"
           cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KernelSU-Next-Manager-v32473-debug.apk"
 
