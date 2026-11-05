@@ -154,7 +154,7 @@ d1)
 ;;
 d1xks)
     SOC=5
-    BOARD=SRPSD23A002KU
+    BOARD=SRPSD26B008KU
 ;;
 d2s)
     SOC=5
@@ -524,13 +524,13 @@ ramdisk ()
     mv ../../../out/arch/arm64/boot/Image boot.img-kernel
     echo -e "0x10000000" > boot.img-base
     echo -e $BOARD > boot.img-board
-    echo -e "loop.max_part=7" > boot.img-cmdline
+    echo -e "androidboot.selinux=permissive androidboot.selinux=permissive loop.max_part=7" > boot.img-cmdline
     echo -e "sha1" > boot.img-hashtype
     echo -e "1" > boot.img-header_version
     echo -e "AOSP" > boot.img-imgtype
     echo -e "0x00008000" > boot.img-kernel_offset
     echo -e "45285376" > boot.img-origsize
-    echo -e "2023-04" > boot.img-os_patch_level
+    echo -e "2099-12" > boot.img-os_patch_level
     echo -e "12.0.0" > boot.img-os_version
     echo -e "2048" > boot.img-pagesize
     echo -e "0x01000000" > boot.img-ramdisk_offset
