@@ -49,14 +49,11 @@ jobs:
               if count == target:
                   found = sha
                   break
-              if count > target:
-                  break
           if not found:
               sys.exit(
                   "No official KernelSU-Next commit computes versionCode 32473 "
                   "(30000 + reachable commit count 2473). Refusing to spoof it."
               )
-          subprocess.check_call(["git", "-C", repo, "checkout", "--detach", found])
           print(f"Official KernelSU-Next commit: {found}")
           print(f"Kernel/Manager version: {30000 + target}")
           with open(__import__("os").environ["GITHUB_ENV"], "a") as f:
