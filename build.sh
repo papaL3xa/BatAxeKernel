@@ -430,17 +430,16 @@ kernelsu ()
     fi
 
     if ! test -d "drivers/kernelsu"; then
-        quotes "Add KernelSU Next as Submodule"
+        quotes "Add KernelSU Next (legacy-compatible) to Kernel Tree"
         separator
 
-        if test -d "KernelSU-Next"; then
-            rm -rf Ke*
-        fi
-
-        git submodule add -f -q https://github.com/sidex15/KernelSU-Next > /dev/null
-        bash <(curl -LSs "https://raw.githubusercontent.com/sidex15/KernelSU-Next/refs/heads/next-susfs-experimental/kernel/setup.sh")
+        # Pin the same official KernelSU Next snapshot used by an Exynos 9820/9825
+        # One UI 4.1 kernel that carries SuSFS v1.5.9. This predates the
+        # SUSFS-v2 supercall interface and matches the legacy SuSFS patch path.
+        KSU_NEXT_COMMIT="9d9f9ed5d5f3a66a2f44e24c926075554f9275ce"
+        bash <(curl -fsSL "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/legacy/kernel/setup.sh") "$KSU_NEXT_COMMIT"
         separator
-        check "KernelSU Next"
+        check "KernelSU Next (legacy-compatible commit $KSU_NEXT_COMMIT)"
     fi
 
     if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
