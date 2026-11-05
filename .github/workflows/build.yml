@@ -1,5 +1,5 @@
 name: Build (CI)
-run-name: 'CI: Build ${{ github.event.inputs.version || 'v1' }} for device ${{ github.event.inputs.devices || '["d1xks"]' }}'
+run-name: CI Build N971N (legacy KSU)
 
 on:
   push:
