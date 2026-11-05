@@ -433,13 +433,20 @@ kernelsu ()
         quotes "Add KernelSU Next (legacy-compatible) to Kernel Tree"
         separator
 
-        # Pin the same official KernelSU Next snapshot used by an Exynos 9820/9825
-        # One UI 4.1 kernel that carries SuSFS v1.5.9. This predates the
-        # SUSFS-v2 supercall interface and matches the legacy SuSFS patch path.
-        KSU_NEXT_COMMIT="9d9f9ed5d5f3a66a2f44e24c926075554f9275ce"
+        # Trial: pin the current upstream legacy branch snapshot for Linux 4.14.
+        # Keep this isolated on experiment/ksun-legacy-2026-11 until build/runtime
+        # compatibility with the existing Exynos manual hooks and SuSFS is proven.
+        KSU_NEXT_COMMIT="b933b1f728116a456fbebf27b6a8772a640cdf23"
         bash <(curl -fsSL "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/legacy/kernel/setup.sh") "$KSU_NEXT_COMMIT"
         separator
-        check "KernelSU Next (legacy-compatible commit $KSU_NEXT_COMMIT)"
+        check "KernelSU Next (legacy trial commit $KSU_NEXT_COMMIT)"
+    fi
+
+    # New legacy KSU checks for the manual reboot hook in kernel/reboot.c.
+    if ! grep -q 'ksu_handle_sys_reboot' kernel/reboot.c; then
+        quotes "Adding KernelSU Next manual reboot hook"
+        patch -p1 < patches/ksu-next-manual-reboot.patch || abort
+        check "KernelSU Next manual reboot hook"
     fi
 
     if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
