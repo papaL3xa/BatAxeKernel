@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - nex
+      - experiment/ksun-legacy-2026-11
   workflow_dispatch:
     inputs:
       version:
