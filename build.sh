@@ -418,7 +418,7 @@ kernelsu ()
     if ! grep -rnw 'drivers/input/input.c' -e 'CONFIG_KSU' > /dev/null; then
         quotes "Patching KernelSU to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/KernelSU.patch")
+        patch -p1 < <(curl -fsSL "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/KernelSU.patch") || abort
         separator
         check "KernelSU"
     fi
@@ -447,7 +447,7 @@ kernelsu ()
         separator
         quotes "Patching SuSFS to Kernel Tree"
         separator
-        patch -p1 < <(curl -s "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/SuSFS.patch")
+        patch -p1 < <(curl -fsSL "https://raw.githubusercontent.com/papaL3xa/builds/refs/heads/exynos9820/patch/SuSFS.patch") || abort
         separator
         check "SuSFS"
     fi
