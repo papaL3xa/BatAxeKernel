@@ -1,4 +1,4 @@
-name: Se7enKernel N971N KSUN + Matching Manager
+name: Se7enKernel N971N KernelSU-Next 32473 + Matching Manager
 
 on:
   push:
@@ -20,25 +20,60 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Fetch latest KernelSU submodule from its remote default branch
+      - name: Fetch official KernelSU-Next and resolve exact 32473 source revision
         shell: bash
         run: |
           set -euo pipefail
-          git submodule sync -- KernelSU
-          git submodule update --init --remote --depth=1 KernelSU
-          test -f KernelSU/kernel/Makefile
-          KSU_SHA="$(git -C KernelSU rev-parse HEAD)"
-          KSU_REMOTE="$(git -C KernelSU remote get-url origin)"
-          KSU_VERSION="$(grep -oE -- '-DKSU_VERSION=[0-9]+' KernelSU/kernel/Makefile | head -n 1 | cut -d= -f2)"
-          test -n "$KSU_VERSION"
-          {
-            echo "KSU_SHA=$KSU_SHA"
-            echo "KSU_REMOTE=$KSU_REMOTE"
-            echo "KSU_VERSION=$KSU_VERSION"
-          } >> "$GITHUB_ENV"
-          echo "Latest remote KernelSU commit: $KSU_SHA"
-          echo "Kernel driver version: $KSU_VERSION"
-          echo "Remote: $KSU_REMOTE"
+          git clone --no-checkout https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          git -C KernelSU-Next fetch --unshallow origin 2>/dev/null || true
+          git -C KernelSU-Next fetch origin dev --tags
+          git -C KernelSU-Next checkout --detach origin/dev
+
+          # KSUN computes KSU_VERSION as 30000 + git rev-list --count HEAD.
+          # Select the genuine historical source commit whose own count is 2473,
+          # rather than spoofing a version number in either kernel or Manager.
+          python3 - <<'PY'
+          import subprocess, sys
+          repo = "KernelSU-Next"
+          commits = subprocess.check_output(
+              ["git", "-C", repo, "rev-list", "--reverse", "HEAD"], text=True
+          ).splitlines()
+          target = 2473
+          found = None
+          for i, sha in enumerate(commits):
+              if i + 1 < target:
+                  continue
+              count = int(subprocess.check_output(
+                  ["git", "-C", repo, "rev-list", "--count", sha], text=True
+              ).strip())
+              if count == target:
+                  found = sha
+                  break
+              if count > target:
+                  break
+          if not found:
+              sys.exit(
+                  "No official KernelSU-Next commit computes versionCode 32473 "
+                  "(30000 + reachable commit count 2473). Refusing to spoof it."
+              )
+          subprocess.check_call(["git", "-C", repo, "checkout", "--detach", found])
+          print(f"Official KernelSU-Next commit: {found}")
+          print(f"Kernel/Manager version: {30000 + target}")
+          with open(__import__("os").environ["GITHUB_ENV"], "a") as f:
+              f.write(f"KSUN_SHA={found}\n")
+              f.write("KSUN_VERSION=32473\n")
+          PY
+
+      - name: Integrate official KernelSU-Next into the kernel source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh KernelSU-Next/kernel/setup.sh "$KSUN_SHA"
+          test -L drivers/kernelsu
+          test -f drivers/kernelsu/Kbuild
+          grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q 'kernelsu' drivers/Makefile
+          echo "KernelSU-Next integration points verified."
 
       - name: Set timezone and install kernel build dependencies
         run: |
@@ -53,18 +88,18 @@ jobs:
           sed -i 's/^    KERNEL_NAME=BatAxeKernel$/    KERNEL_NAME=Se7enKernel/' build.sh
           grep -q '^    KERNEL_NAME=Se7enKernel$' build.sh
           chmod +x build.sh
-          # Preserve the known boot-tested build parameters; KSU was advanced above.
-          bash build.sh -m d1xks -v N971N-KSUN -k y -l 13 -r n
+          # Keep the boot-tested N971N parameters and existing KSUN config.
+          bash build.sh -m d1xks -v N971N-KSUN-32473 -k y -l 13 -r n
           test -d build/out/d1xks/zip
           test -s build/out/d1xks/zip/boot.img
 
-      - name: Set up Java 21 and Android SDK for Manager
+      - name: Set up Java 21 and Android SDK for official KSUN Manager
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Install Android command-line tools and Manager SDK
+      - name: Install Android SDK required by official KSUN Manager
         shell: bash
         run: |
           set -euo pipefail
@@ -79,33 +114,21 @@ jobs:
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-36" "build-tools;36.1.0" "ndk;29.0.14206865"
 
-      - name: Build matching Manager from the exact same KernelSU commit
+      - name: Build official Manager from the exact same KernelSU-Next commit
         shell: bash
         run: |
           set -euo pipefail
-          MANAGER_DIR="$GITHUB_WORKSPACE/KernelSU/manager"
+          MANAGER_DIR="$GITHUB_WORKSPACE/KernelSU-Next/manager"
           test -x "$MANAGER_DIR/gradlew"
           cd "$MANAGER_DIR"
-          python3 - "$KSU_VERSION" <<'PY'
-          import pathlib, re, sys
-          version = int(sys.argv[1])
-          p = pathlib.Path("build.gradle.kts")
-          source = p.read_text()
-          pattern = r"return\s+29971\s*\+\s*commitCount"
-          updated, count = re.subn(pattern, f"return {version}", source, count=1)
-          if count != 1:
-              raise SystemExit("Cannot safely pin Manager versionCode in this source revision")
-          p.write_text(updated)
-          print(f"Pinned Manager versionCode={version}")
-          PY
           ./gradlew --no-daemon assembleDebug
           APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" | grep -q "versionCode='$KSU_VERSION'"
+          "$ANDROID_HOME/build-tools/36.1.0/aapt" dump badging "$APK" | grep -q "versionCode='32473'"
           mkdir -p "$GITHUB_WORKSPACE/build/export"
-          cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KSUN-Manager-v$KSU_VERSION-debug.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KernelSU-Next-Manager-v32473-debug.apk"
 
       - name: Record exact source, config and checksums
         shell: bash
@@ -114,9 +137,10 @@ jobs:
           mkdir -p build/export
           {
             echo "Kernel base commit: $(git rev-parse HEAD)"
-            echo "KernelSU remote: $KSU_REMOTE"
-            echo "KernelSU commit: $KSU_SHA"
-            echo "KernelSU driver version: $KSU_VERSION"
+            echo "KernelSU-Next official remote: https://github.com/KernelSU-Next/KernelSU-Next.git"
+            echo "KernelSU-Next commit: $KSUN_SHA"
+            echo "KernelSU-Next driver/Manager version: $KSUN_VERSION"
+            echo "Manager package: com.rifsxd.ksunext"
             echo "Kernel name: Se7enKernel"
             echo "Device: SM-N971N (d1xks)"
             echo "Kernel localversion:"
@@ -128,10 +152,10 @@ jobs:
           cat build/export/kernel-SHA256SUMS
           cat build/export/manager-SHA256SUMS
 
-      - name: Upload Se7enKernel package and matched Manager
+      - name: Upload Se7enKernel and matching official KSUN Manager
         uses: actions/upload-artifact@v4
         with:
-          name: Se7enKernel-N971N-KSUN-${{ github.run_number }}
+          name: Se7enKernel-N971N-KernelSU-Next-32473-${{ github.run_number }}
           path: |
             build/out/d1xks/zip/*
             build/export/*
