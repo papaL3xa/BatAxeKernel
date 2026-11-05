@@ -1,7 +1,10 @@
 name: Build (CI)
-run-name: 'CI: Build ${{ github.event.inputs.version }} for device ${{ github.event.inputs.devices }}'
+run-name: 'CI: Build ${{ github.event.inputs.version || 'v1' }} for device ${{ github.event.inputs.devices || '["d1xks"]' }}'
 
 on:
+  push:
+    branches:
+      - nex
   workflow_dispatch:
     inputs:
       version:
@@ -24,7 +27,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        device: ${{ fromJSON(github.event.inputs.devices) }}
+        device: ${{ fromJSON(github.event.inputs.devices || '["d1xks"]') }}
 
     steps:
       - name: Checkout Tree
@@ -40,11 +43,11 @@ jobs:
         run: |
           SHA=$(git rev-parse --short ${{ github.sha }})
           echo BUILD_DATE=$(date +'%Y%m%d') >> $GITHUB_ENV
-          echo BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version }}-$SHA >> $GITHUB_ENV
+          echo BUILD_KERNEL_VERSION=CI-${{ github.event.inputs.version || 'v1' }}-$SHA >> $GITHUB_ENV
           
       - name: Building Kernel
         run: |
-            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -l ${{ github.event.inputs.llvm }} -r n
+            bash build.sh -m ${{ matrix.device }} -v ${{ env.BUILD_KERNEL_VERSION }} -l ${{ github.event.inputs.llvm || '13' }} -r n
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
