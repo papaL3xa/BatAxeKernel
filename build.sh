@@ -449,6 +449,14 @@ kernelsu ()
         check "KernelSU Next manual reboot hook"
     fi
 
+    # The upstream legacy runtime now exposes a syscall-level read hook.
+    # Replace the older Exynos patch's vfs_read() hook, whose helper was removed.
+    if ! grep -q 'ksu_handle_sys_read' fs/read_write.c; then
+        quotes "Updating KernelSU Next manual read hook"
+        patch -p1 < patches/ksu-next-manual-read.patch || abort
+        check "KernelSU Next manual read hook"
+    fi
+
     if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
         separator
         quotes "Patching SuSFS to Kernel Tree"
