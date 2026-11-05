@@ -1,5 +1,3 @@
-diff --git a/kernel/reboot.c b/kernel/reboot.c
-index 0000000..0000000 100644
 --- a/kernel/reboot.c
 +++ b/kernel/reboot.c
 @@ -296,9 +296,16 @@
