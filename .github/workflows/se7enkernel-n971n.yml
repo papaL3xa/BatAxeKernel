@@ -64,12 +64,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Manager SDK and NDK
+      - name: Install Android command-line tools and Manager SDK
+        shell: bash
         run: |
-          sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865"
+          set -euo pipefail
+          export ANDROID_HOME="$RUNNER_TEMP/android-sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o "$RUNNER_TEMP/android-cmdline-tools.zip"
+          unzip -q "$RUNNER_TEMP/android-cmdline-tools.zip" -d "$RUNNER_TEMP/android-cmdline-tools"
+          mv "$RUNNER_TEMP/android-cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865"
 
       - name: Build matching Manager from the exact same KernelSU commit
         shell: bash
