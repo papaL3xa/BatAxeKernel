@@ -457,6 +457,13 @@ kernelsu ()
         check "KernelSU Next manual read hook"
     fi
 
+    # The old Exynos integration had a devpts hook that no longer exists upstream.
+    if grep -q 'ksu_handle_devpts' fs/devpts/inode.c; then
+        quotes "Removing obsolete KernelSU devpts hook"
+        patch -p1 < patches/ksu-next-remove-devpts.patch || abort
+        check "Remove obsolete KernelSU devpts hook"
+    fi
+
     if ! grep -rnw 'fs/Makefile' -e 'CONFIG_KSU_SUSFS' > /dev/null; then
         separator
         quotes "Patching SuSFS to Kernel Tree"
