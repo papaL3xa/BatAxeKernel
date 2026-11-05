@@ -20,71 +20,64 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Fetch official KernelSU-Next and resolve exact 32473 source revision
+      - name: Checkout boot-tested KernelSU kernel source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/rsuntk/KernelSU.git KernelSU
+          git -C KernelSU checkout --detach 88e37d606fc12758421c3e36b0f61499610cfe8d
+          KSU_KERNEL_SHA="$(git -C KernelSU rev-parse HEAD)"
+          KSU_KERNEL_COUNT="$(git -C KernelSU rev-list --count HEAD)"
+          KSU_KERNEL_VERSION="$((30000 + KSU_KERNEL_COUNT))"
+          test "$KSU_KERNEL_SHA" = "88e37d606fc12758421c3e36b0f61499610cfe8d"
+          echo "KernelSU kernel source: $KSU_KERNEL_SHA"
+          echo "KernelSU reachable commit count: $KSU_KERNEL_COUNT"
+          echo "Kernel driver version from source formula: $KSU_KERNEL_VERSION"
+          if [ "$KSU_KERNEL_VERSION" != "32473" ]; then
+            echo "::error::Pinned KernelSU source computes $KSU_KERNEL_VERSION, not expected 32473. Refusing to build."
+            exit 1
+          fi
+          {
+            echo "KSU_KERNEL_SHA=$KSU_KERNEL_SHA"
+            echo "KSU_KERNEL_COUNT=$KSU_KERNEL_COUNT"
+            echo "KSU_KERNEL_VERSION=$KSU_KERNEL_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout official KernelSU-Next Manager source
         shell: bash
         run: |
           set -euo pipefail
           git clone --no-checkout https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
-          git -C KernelSU-Next fetch --unshallow origin 2>/dev/null || true
-          git -C KernelSU-Next fetch origin dev --tags
-          git -C KernelSU-Next checkout --detach origin/dev
+          git -C KernelSU-Next checkout --detach 9b5e60912d536ed4c38988c9b3a3ac48f1138d67
+          KSUN_MANAGER_SHA="$(git -C KernelSU-Next rev-parse HEAD)"
+          KSUN_MANAGER_COUNT="$(git -C KernelSU-Next rev-list --count HEAD)"
+          KSUN_MANAGER_VERSION_CODE="$((10000 + KSUN_MANAGER_COUNT + 200))"
+          test "$KSUN_MANAGER_SHA" = "9b5e60912d536ed4c38988c9b3a3ac48f1138d67"
+          echo "KernelSU-Next Manager source: $KSUN_MANAGER_SHA"
+          echo "Manager commit count: $KSUN_MANAGER_COUNT"
+          echo "Manager APK versionCode from official formula: $KSUN_MANAGER_VERSION_CODE"
+          {
+            echo "KSUN_MANAGER_SHA=$KSUN_MANAGER_SHA"
+            echo "KSUN_MANAGER_COUNT=$KSUN_MANAGER_COUNT"
+            echo "KSUN_MANAGER_VERSION_CODE=$KSUN_MANAGER_VERSION_CODE"
+          } >> "$GITHUB_ENV"
 
-          # KSUN computes KSU_VERSION as 30000 + git rev-list --count HEAD.
-          # Select the genuine historical source commit whose own count is 2473,
-          # rather than spoofing a version number in either kernel or Manager.
-          python3 - <<'PY'
-          import subprocess, sys
-          repo = "KernelSU-Next"
-          commits = subprocess.check_output(
-              ["git", "-C", repo, "rev-list", "--reverse", "HEAD"], text=True
-          ).splitlines()
-          target = 2473
-          found = None
-          for i, sha in enumerate(commits):
-              if i + 1 < target:
-                  continue
-              count = int(subprocess.check_output(
-                  ["git", "-C", repo, "rev-list", "--count", sha], text=True
-              ).strip())
-              if count == target:
-                  found = sha
-                  break
-          if not found:
-              sys.exit(
-                  "No official KernelSU-Next commit computes versionCode 32473 "
-                  "(30000 + reachable commit count 2473). Refusing to spoof it."
-              )
-          print(f"Official KernelSU-Next commit: {found}")
-          print(f"Kernel/Manager version: {30000 + target}")
-          # IMPORTANT: actually switch the working tree to the selected commit.
-          # Merely recording KSUN_SHA leaves the checkout at current dev.
-          subprocess.check_call(["git", "-C", repo, "checkout", "--detach", found])
-          actual = subprocess.check_output(
-              ["git", "-C", repo, "rev-parse", "HEAD"], text=True
-          ).strip()
-          if actual != found:
-              sys.exit(f"KSUN checkout mismatch: expected {found}, got {actual}")
-          print(f"Verified checked-out KernelSU-Next HEAD: {actual}")
-          with open(__import__("os").environ["GITHUB_ENV"], "a") as f:
-              f.write(f"KSUN_SHA={found}\n")
-              f.write("KSUN_VERSION=32473\n")
-          PY
-
-      - name: Integrate official KernelSU-Next into the kernel source
+      - name: Integrate the boot-tested KernelSU fork into the kernel source
         shell: bash
         run: |
           set -euo pipefail
-          test -d KernelSU-Next/kernel
+          test -f KernelSU/kernel/Kbuild
+          test -f KernelSU/kernel/Kconfig
           mkdir -p drivers
-          ln -sfn ../KernelSU-Next/kernel drivers/kernelsu
+          ln -sfn ../KernelSU/kernel drivers/kernelsu
           grep -qF 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           grep -qF 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
           test -L drivers/kernelsu
           test -f drivers/kernelsu/Kbuild
           grep -qF 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           grep -qF 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile
-          echo "Official KernelSU-Next symlink, Kconfig and Makefile integration verified."
-          
+          echo "Pinned rsuntk/KernelSU Kbuild, Kconfig and symlink integration verified."
+
       - name: Set timezone and install kernel build dependencies
         run: |
           sudo timedatectl set-timezone Asia/Jakarta
@@ -132,17 +125,13 @@ jobs:
           set -euo pipefail
           MANAGER_DIR="$GITHUB_WORKSPACE/KernelSU-Next/manager"
           test -x "$MANAGER_DIR/gradlew"
-          # Keep the official Manager implementation untouched; align only the
-          # Android package versionCode label with the exact 32473 kernel build.
-          sed -i 's/val managerVersionCode by extra(getVersionCode())/val managerVersionCode by extra(32473)/' "$MANAGER_DIR/build.gradle.kts"
-          grep -q 'val managerVersionCode by extra(32473)' "$MANAGER_DIR/build.gradle.kts"
           cd "$MANAGER_DIR"
           ./gradlew --no-daemon assembleDebug
           APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "versionCode='32473'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "versionCode='$KSUN_MANAGER_VERSION_CODE'"
           mkdir -p "$GITHUB_WORKSPACE/build/export"
-          cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KernelSU-Next-Manager-v32473-debug.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/build/export/Se7enKernel-KernelSU-Next-Manager-v${KSUN_MANAGER_VERSION_CODE}-debug.apk"
 
       - name: Record exact source, config and checksums
         shell: bash
@@ -151,9 +140,13 @@ jobs:
           mkdir -p build/export
           {
             echo "Kernel base commit: $(git rev-parse HEAD)"
-            echo "KernelSU-Next official remote: https://github.com/KernelSU-Next/KernelSU-Next.git"
-            echo "KernelSU-Next commit: $KSUN_SHA"
-            echo "KernelSU-Next driver/Manager version: $KSUN_VERSION"
+            echo "KernelSU kernel source: https://github.com/rsuntk/KernelSU.git"
+            echo "KernelSU kernel commit: $KSU_KERNEL_SHA"
+            echo "KernelSU kernel commit count: $KSU_KERNEL_COUNT"
+            echo "KernelSU driver version: $KSU_KERNEL_VERSION"
+            echo "KernelSU-Next Manager source: https://github.com/KernelSU-Next/KernelSU-Next.git"
+            echo "KernelSU-Next Manager commit: $KSUN_MANAGER_SHA"
+            echo "Manager APK versionCode: $KSUN_MANAGER_VERSION_CODE"
             echo "Manager package: com.rifsxd.ksunext"
             echo "Kernel name: Se7enKernel"
             echo "Device: SM-N971N (d1xks)"
