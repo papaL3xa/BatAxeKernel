@@ -1,0 +1,81 @@
+name: N971N-U2-KSUN-Legacy-Test
+
+on:
+  push:
+    branches:
+      - chatgpt/ksun-legacy-build-test
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Kernel local version suffix
+        required: true
+        default: N971N-U2-KSUN-TEST1
+
+permissions:
+  contents: read
+
+jobs:
+  build-ksun-legacy:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout kernel source and pinned submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install kernel build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex gcc-aarch64-linux-gnu \
+            git libssl-dev lz4 make python3 zip zlib1g-dev
+
+      - name: Apply N971N U2 image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/BOARD=SRPSD23A002KU/BOARD=SRPSD26B008KU/' build.sh
+          sed -i 's/2023-04/2099-12/' build.sh
+          grep -q 'BOARD=SRPSD26B008KU' build.sh
+          grep -q '2099-12' build.sh
+          chmod +x build.sh scripts/prepare-ksu-variant.sh
+
+      - name: Prepare official KernelSU Next legacy driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare-ksu-variant.sh ksun legacy
+
+      - name: Build N971N kernel and flashable ZIP
+        shell: bash
+        env:
+          BUILD_VERSION: ${{ inputs.version || 'N971N-U2-KSUN-TEST1' }}
+        run: |
+          set -euo pipefail
+          bash build.sh -m d1xks -v "$BUILD_VERSION" -k y -l 13 -r y
+
+      - name: Verify kernel configuration and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s out/.config
+          grep -q '^CONFIG_KSU=y$' out/.config
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
+          test -d build/export
+          ZIP_COUNT=$(find build/export -maxdepth 1 -type f -name '*.zip' | wc -l)
+          test "$ZIP_COUNT" -ge 1
+          cp build/ksu-source-info.txt build/export/
+          (cd build/export && sha256sum *.zip > SHA256SUMS)
+          echo "KernelSU Next legacy config verified:"
+          grep -E '^CONFIG_KSU(=|_)' out/.config
+
+      - name: Upload kernel ZIP and build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: N971N-U2-KSUN-Legacy-${{ github.run_number }}
+          path: |
+            build/export/*.zip
+            build/export/ksu-source-info.txt
+            build/export/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
